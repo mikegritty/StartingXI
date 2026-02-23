@@ -67,7 +67,7 @@ export default function LeftPanel() {
   const setShowNames = useSettingsStore((s) => s.setShowPlayerNames)
 
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-panel flex flex-col overflow-hidden">
+    <aside className="w-full md:w-56 md:shrink-0 md:border-r border-border bg-panel flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-0">
         <TeamSection team="home" />
         <div className="border-t border-border my-3" />

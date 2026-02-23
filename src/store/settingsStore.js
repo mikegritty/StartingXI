@@ -6,6 +6,7 @@ export const useSettingsStore = create((set) => ({
   selectedPlayerId: null,
   confirmDialogOpen: false,
   pendingFormationApply: null, // { team, players, formationKey, phase }
+  pendingSubId: null,          // id of sub selected for touch substitution
 
   // Which phase is being viewed/edited per team: 'in' | 'out'
   activePhase: { home: 'in', away: 'in' },
@@ -19,6 +20,7 @@ export const useSettingsStore = create((set) => ({
   setActiveTool: (tool) => set({ activeTool: tool }),
   setShowPlayerNames: (v) => set({ showPlayerNames: v }),
   setSelectedPlayerId: (id) => set({ selectedPlayerId: id }),
+  setPendingSubId: (id) => set({ pendingSubId: id }),
 
   setActivePhase: (team, phase) =>
     set((s) => ({

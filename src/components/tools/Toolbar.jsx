@@ -52,16 +52,24 @@ const TOOLS = [
   )},
 ]
 
-export default function Toolbar() {
+// On mobile, show only the most-used tools to leave room for panel toggles
+const MOBILE_TOOL_IDS = ['select', 'arrow', 'curved', 'free', 'erase']
+
+export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
   const activeTool    = useSettingsStore((s) => s.activeTool)
   const setActiveTool = useSettingsStore((s) => s.setActiveTool)
 
+  const visibleTools = isMobile ? TOOLS.filter((t) => MOBILE_TOOL_IDS.includes(t.id)) : TOOLS
+
   return (
-    <footer className="h-11 border-t border-border bg-panel flex items-center px-3 gap-0.5 shrink-0">
-      {TOOLS.map((tool, i) => (
+    <footer
+      className="border-t border-border bg-panel flex items-center px-3 gap-0.5 shrink-0"
+      style={{ minHeight: '44px', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {visibleTools.map((tool, i) => (
         <React.Fragment key={tool.id}>
-          {/* Separator before eraser */}
-          {i === TOOLS.length - 1 && (
+          {/* Separator before eraser (desktop) */}
+          {!isMobile && i === TOOLS.length - 1 && (
             <div className="w-px h-5 bg-border mx-1.5" />
           )}
           <button
@@ -80,10 +88,54 @@ export default function Toolbar() {
         </React.Fragment>
       ))}
 
-      {/* Right side: keyboard hint */}
-      <div className="ml-auto text-[10px] text-text-muted opacity-50 select-none pr-1">
-        Right-click player to delete · V to select · A to draw arrows
-      </div>
+      {/* Desktop: keyboard hint */}
+      {!isMobile && (
+        <div className="ml-auto text-[10px] text-text-muted opacity-50 select-none pr-1">
+          Right-click player to delete · V to select · A to draw arrows
+        </div>
+      )}
+
+      {/* Mobile: panel toggle buttons */}
+      {isMobile && (
+        <div className="ml-auto flex items-center gap-1">
+          <div className="w-px h-5 bg-border mx-1" />
+
+          {/* Team Setup toggle */}
+          <button
+            onClick={() => onToggleSheet('left')}
+            className={`flex flex-col items-center justify-center w-11 h-9 rounded-md
+                        transition-colors gap-0.5
+                        ${activeSheet === 'left'
+                          ? 'bg-accent-blue text-white'
+                          : 'text-text-muted hover:text-text-primary hover:bg-surface'
+                        }`}
+            title="Team Setup"
+          >
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="7" cy="5" r="2.5"/>
+              <path d="M2 12c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+            </svg>
+            <span className="text-[8px] font-medium leading-none">Team</span>
+          </button>
+
+          {/* Squad toggle */}
+          <button
+            onClick={() => onToggleSheet('right')}
+            className={`flex flex-col items-center justify-center w-11 h-9 rounded-md
+                        transition-colors gap-0.5
+                        ${activeSheet === 'right'
+                          ? 'bg-accent-blue text-white'
+                          : 'text-text-muted hover:text-text-primary hover:bg-surface'
+                        }`}
+            title="Squad"
+          >
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 4h10M2 7h10M2 10h6"/>
+            </svg>
+            <span className="text-[8px] font-medium leading-none">Squad</span>
+          </button>
+        </div>
+      )}
     </footer>
   )
 }

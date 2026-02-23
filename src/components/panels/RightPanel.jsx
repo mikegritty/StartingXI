@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useBoardStore } from '../../store/boardStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import { useMobile } from '../../hooks/useMobile'
 
 const ROLE_LABELS = {
   GK:  { label: 'Goalkeeper', short: 'GK',  color: '#f59e0b' },
@@ -26,9 +28,10 @@ function contrastColor(hex) {
 }
 
 // ── Inline-editable squad row ─────────────────────────────────────────────────
-function SquadRow({ player, homeColor, numColor, draggable, updatePlayer }) {
+function SquadRow({ player, homeColor, numColor, draggable, updatePlayer, pendingSubId, onSelectSub }) {
   const [editingField, setEditingField] = useState(null) // 'number' | 'name' | 'position'
   const inputRef = useRef(null)
+  const isMobile = useMobile()
 
   useEffect(() => {
     if (editingField && inputRef.current) inputRef.current.focus()
@@ -49,16 +52,27 @@ function SquadRow({ player, homeColor, numColor, draggable, updatePlayer }) {
     e.dataTransfer.effectAllowed = 'move'
   }
 
+  // Mobile: tap entire sub row to select for substitution
+  const handleSubRowTap = () => {
+    if (!draggable) return
+    onSelectSub(player.id === pendingSubId ? null : player.id)
+  }
+
   const stopPropagation = (e) => e.stopPropagation()
 
   const roleInfo = ROLE_LABELS[player.role] || ROLE_LABELS.MID
+  const isPendingSub = draggable && player.id === pendingSubId
 
   return (
     <div
-      draggable={draggable}
-      onDragStart={draggable ? handleDragStart : undefined}
+      draggable={!isMobile && draggable}
+      onDragStart={!isMobile && draggable ? handleDragStart : undefined}
+      onClick={isMobile && draggable ? handleSubRowTap : undefined}
       className={`flex items-center gap-1.5 py-1 px-1 rounded-md group transition-colors
-        ${draggable ? 'hover:bg-white/[0.06]' : 'hover:bg-white/[0.04]'}`}
+        ${isPendingSub
+          ? 'bg-accent-blue/20 ring-1 ring-accent-blue/60'
+          : draggable ? 'hover:bg-white/[0.06]' : 'hover:bg-white/[0.04]'
+        }`}
     >
       {/* Number circle — click to edit */}
       {editingField === 'number' ? (
@@ -148,10 +162,16 @@ function SquadRow({ player, homeColor, numColor, draggable, updatePlayer }) {
         </span>
       )}
 
-      {/* Drag handle for subs */}
-      {draggable && (
+      {/* Drag handle (desktop) / tap indicator (mobile) */}
+      {draggable && !isMobile && (
         <span className="text-text-muted text-[10px] shrink-0 opacity-40 cursor-grab
                          group-hover:opacity-70 transition-opacity">⠿</span>
+      )}
+      {draggable && isMobile && (
+        <span className={`text-[9px] shrink-0 transition-colors leading-none
+          ${isPendingSub ? 'text-accent-blue font-semibold' : 'text-text-muted opacity-50'}`}>
+          {isPendingSub ? '✓' : '↕'}
+        </span>
       )}
     </div>
   )
@@ -159,10 +179,13 @@ function SquadRow({ player, homeColor, numColor, draggable, updatePlayer }) {
 
 // ── Squad list section ────────────────────────────────────────────────────────
 function SquadList({ players, homeColor }) {
-  const starters     = players.filter((p) => p.isStarter !== false)
-  const subs         = players.filter((p) => p.isStarter === false)
-  const numColor     = contrastColor(homeColor)
-  const updatePlayer = useBoardStore((s) => s.updatePlayer)
+  const starters      = players.filter((p) => p.isStarter !== false)
+  const subs          = players.filter((p) => p.isStarter === false)
+  const numColor      = contrastColor(homeColor)
+  const updatePlayer  = useBoardStore((s) => s.updatePlayer)
+  const pendingSubId  = useSettingsStore((s) => s.pendingSubId)
+  const setPendingSubId = useSettingsStore((s) => s.setPendingSubId)
+  const isMobile      = useMobile()
 
   return (
     <div className="space-y-3">
@@ -173,6 +196,22 @@ function SquadList({ players, homeColor }) {
         )}
       </datalist>
 
+      {/* Mobile substitution hint banner */}
+      {isMobile && pendingSubId && (
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md
+                        bg-accent-blue/15 border border-accent-blue/40">
+          <span className="text-[10px] text-accent-blue font-medium">
+            Tap a player on the pitch to substitute
+          </span>
+          <button
+            onClick={() => setPendingSubId(null)}
+            className="text-[10px] text-text-muted hover:text-text-primary shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Starting XI */}
       <div>
         <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -181,7 +220,8 @@ function SquadList({ players, homeColor }) {
         <div className="space-y-0.5">
           {starters.map((p) => (
             <SquadRow key={p.id} player={p} homeColor={homeColor} numColor={numColor}
-              draggable={false} updatePlayer={updatePlayer} />
+              draggable={false} updatePlayer={updatePlayer}
+              pendingSubId={pendingSubId} onSelectSub={setPendingSubId} />
           ))}
           {starters.length === 0 && (
             <p className="text-[11px] text-text-muted italic px-1.5">
@@ -203,7 +243,8 @@ function SquadList({ players, homeColor }) {
           <div className="space-y-0.5">
             {subs.map((p) => (
               <SquadRow key={p.id} player={p} homeColor={homeColor} numColor={numColor}
-                draggable={true} updatePlayer={updatePlayer} />
+                draggable={true} updatePlayer={updatePlayer}
+                pendingSubId={pendingSubId} onSelectSub={setPendingSubId} />
             ))}
           </div>
         </div>
@@ -222,7 +263,7 @@ export default function RightPanel() {
   const homePlayers = players.filter((p) => p.team === 'home')
 
   return (
-    <aside className="w-52 shrink-0 border-l border-border bg-panel flex flex-col overflow-hidden">
+    <aside className="w-full md:w-52 md:shrink-0 md:border-l border-border bg-panel flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
 
         {/* ── Home squad list ───────────────────────────────────────────── */}

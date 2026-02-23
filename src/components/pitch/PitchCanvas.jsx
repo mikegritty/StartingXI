@@ -13,12 +13,14 @@ export default function PitchCanvas() {
   const [stageSize, setStageSize]   = useState({ width: 800, height: 600 })
   const [dropTarget, setDropTarget] = useState(null) // starterId being hovered over
 
-  const zoneOverlay       = useBoardStore((s) => s.board.pitch.zoneOverlay)
-  const deselectAll       = useBoardStore((s) => s.deselectAll)
-  const players           = useBoardStore((s) => s.board.players)
-  const substitutePlayer  = useBoardStore((s) => s.substitutePlayer)
+  const zoneOverlay        = useBoardStore((s) => s.board.pitch.zoneOverlay)
+  const deselectAll        = useBoardStore((s) => s.deselectAll)
+  const players            = useBoardStore((s) => s.board.players)
+  const substitutePlayer   = useBoardStore((s) => s.substitutePlayer)
   const setSelectedPlayerId = useSettingsStore((s) => s.setSelectedPlayerId)
-  const activePhase       = useSettingsStore((s) => s.activePhase)
+  const activePhase        = useSettingsStore((s) => s.activePhase)
+  const pendingSubId       = useSettingsStore((s) => s.pendingSubId)
+  const setPendingSubId    = useSettingsStore((s) => s.setPendingSubId)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -34,6 +36,10 @@ export default function PitchCanvas() {
   }, [])
 
   const pitchRect = getPitchRect(stageSize.width, stageSize.height, 36)
+
+  // Scale tokens relative to pitch width — keeps them proportional on narrow mobile screens
+  // Reference width 560px = 1.0 scale. Clamp between 0.7 and 1.1.
+  const tokenScale = Math.min(1.1, Math.max(0.7, stageSize.width / 560))
 
   const handleStageClick = (e) => {
     if (e.target === e.target.getStage()) {
@@ -95,6 +101,9 @@ export default function PitchCanvas() {
     setDropTarget(null)
   }
 
+  // Combined drop target: HTML5 drag-and-drop (desktop) OR pending touch sub (mobile)
+  const effectiveDropTarget = dropTarget
+
   return (
     <div
       ref={containerRef}
@@ -109,14 +118,35 @@ export default function PitchCanvas() {
         height={stageSize.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        perfectDrawEnabled={false}
+        pixelRatio={Math.min(window.devicePixelRatio ?? 1, 2)}
       >
         <PitchLines pitchRect={pitchRect} zoneOverlay={zoneOverlay} />
         <PlayerLayer
           pitchRect={pitchRect}
           activePhase={activePhase}
-          dropTargetId={dropTarget}
+          dropTargetId={effectiveDropTarget}
+          pendingSubMode={!!pendingSubId}
+          tokenScale={tokenScale}
         />
       </Stage>
+
+      {/* Mobile substitution mode banner — overlays pitch */}
+      {pendingSubId && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10
+                        flex items-center gap-2 px-3 py-1.5 rounded-full
+                        bg-accent-blue/90 backdrop-blur-sm shadow-lg">
+          <span className="text-[11px] text-white font-medium whitespace-nowrap">
+            Tap a player to substitute
+          </span>
+          <button
+            onClick={() => setPendingSubId(null)}
+            className="text-white/70 hover:text-white text-xs leading-none"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }

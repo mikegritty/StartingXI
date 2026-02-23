@@ -182,7 +182,7 @@ export default function SquadEditor({ team, onClose }) {
         {POSITION_OPTIONS.map((p) => <option key={p} value={p} />)}
       </datalist>
 
-      <div className="bg-panel border border-border rounded-xl shadow-2xl w-[540px] max-h-[88vh] flex flex-col">
+      <div className="bg-panel border border-border rounded-xl shadow-2xl w-full mx-4 md:mx-0 md:w-[540px] max-h-[88vh] flex flex-col">
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border shrink-0">

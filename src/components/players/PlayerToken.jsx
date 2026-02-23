@@ -3,7 +3,7 @@ import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { normToPixel, pixelToNorm, clampNorm } from '../../utils/positions'
 
-const TOKEN_RADIUS = 18  // 36px diameter
+const TOKEN_RADIUS = 18  // 36px diameter — base size, scaled via tokenScale prop
 
 /**
  * Compute a contrasting text colour (black or white) for a given hex background.
@@ -21,7 +21,7 @@ function contrastColor(hex) {
   }
 }
 
-export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) {
+export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pendingSubMode, tokenScale = 1 }) {
   const { id, team, role, selected } = player
 
   // Pull position from the correct phase
@@ -30,22 +30,29 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
   const number = player.number
   const name   = player.name
 
-  const movePlayer    = useBoardStore((s) => s.movePlayer)
-  const removePlayer  = useBoardStore((s) => s.removePlayer)
-  const selectPlayer  = useBoardStore((s) => s.selectPlayer)
-  const homeColor     = useBoardStore((s) => s.board.teams.home.primaryColor)
-  const awayColor     = useBoardStore((s) => s.board.teams.away.primaryColor)
-  const showNames     = useSettingsStore((s) => s.showPlayerNames)
-  const setSelectedId = useSettingsStore((s) => s.setSelectedPlayerId)
+  const movePlayer       = useBoardStore((s) => s.movePlayer)
+  const removePlayer     = useBoardStore((s) => s.removePlayer)
+  const selectPlayer     = useBoardStore((s) => s.selectPlayer)
+  const substitutePlayer = useBoardStore((s) => s.substitutePlayer)
+  const homeColor        = useBoardStore((s) => s.board.teams.home.primaryColor)
+  const awayColor        = useBoardStore((s) => s.board.teams.away.primaryColor)
+  const showNames        = useSettingsStore((s) => s.showPlayerNames)
+  const setSelectedId    = useSettingsStore((s) => s.setSelectedPlayerId)
+  const pendingSubId     = useSettingsStore((s) => s.pendingSubId)
+  const setPendingSubId  = useSettingsStore((s) => s.setPendingSubId)
 
   const { px, py } = normToPixel(nx, ny, pitchRect)
 
   const isHome = team === 'home'
   const isGK   = role === 'GK'
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   const GK_COLOR  = '#f59e0b'
   const fillColor = isGK ? GK_COLOR : (isHome ? homeColor : awayColor)
   const numColor  = contrastColor(fillColor)
+
+  // Scaled radius for visual elements — hit area stays larger for touch
+  const r = TOKEN_RADIUS * tokenScale
 
   const handleDragEnd = (e) => {
     const node = e.target
@@ -55,6 +62,12 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
 
   const handleClick = (e) => {
     e.cancelBubble = true
+    // Touch substitution: if a sub is pending and this is a home starter, sub them in
+    if (pendingSubId && team === 'home') {
+      substitutePlayer(pendingSubId, id)
+      setPendingSubId(null)
+      return
+    }
     selectPlayer(id)
     setSelectedId(id)
   }
@@ -66,9 +79,19 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
     setSelectedId(null)
   }
 
+  // Mobile delete: tap the ✕ badge on a selected token
+  const handleDeleteBadge = (e) => {
+    e.cancelBubble = true
+    removePlayer(id)
+    setSelectedId(null)
+  }
+
   const handleDragStart = (e) => {
     e.target.moveToTop()
   }
+
+  // When substitution mode is active, highlight all home starters as valid targets
+  const isSubTarget = pendingSubMode && team === 'home'
 
   return (
     <Group
@@ -81,13 +104,25 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
       onTap={handleClick}
       onContextMenu={handleContextMenu}
     >
-      {/* Invisible hit area — ensures drag works even when inner shapes have listening=false */}
-      <Circle radius={TOKEN_RADIUS + 4} fill="transparent" />
+      {/* Invisible hit area — kept larger than visual token for easy touch targets */}
+      <Circle radius={Math.max(TOKEN_RADIUS + 6, r + 4)} fill="transparent" />
+
+      {/* Sub target pulse ring — shown when substitution mode is active */}
+      {isSubTarget && !isDropTarget && (
+        <Circle
+          radius={r + 9}
+          stroke="#22d3ee"
+          strokeWidth={1.5}
+          fill="transparent"
+          opacity={0.4}
+          listening={false}
+        />
+      )}
 
       {/* Drop target highlight ring */}
       {isDropTarget && (
         <Circle
-          radius={TOKEN_RADIUS + 9}
+          radius={r + 9}
           stroke="#22d3ee"
           strokeWidth={3}
           fill="rgba(34,211,238,0.15)"
@@ -98,7 +133,7 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
       {/* Selection ring */}
       {selected && (
         <Circle
-          radius={TOKEN_RADIUS + 6}
+          radius={r + 6}
           stroke="#ffffff"
           strokeWidth={2.5}
           fill="transparent"
@@ -106,18 +141,18 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
         />
       )}
 
-      {/* Drop shadow (offset, listening=false, drawn before body) */}
+      {/* Drop shadow */}
       <Circle
-        radius={TOKEN_RADIUS - 1}
+        radius={r - 1}
         fill="rgba(0,0,0,0.4)"
         offsetX={-2}
         offsetY={-3}
         listening={false}
       />
 
-      {/* Token body — circle for all players (GK distinguished by amber colour) */}
+      {/* Token body */}
       <Circle
-        radius={TOKEN_RADIUS}
+        radius={r}
         fill={fillColor}
         stroke="rgba(255,255,255,0.3)"
         strokeWidth={1.5}
@@ -127,14 +162,14 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
       {/* Jersey number */}
       <Text
         text={String(number)}
-        fontSize={13}
+        fontSize={Math.round(13 * tokenScale)}
         fontStyle="bold"
         fontFamily="Inter, system-ui, sans-serif"
         fill={numColor}
-        width={TOKEN_RADIUS * 2}
+        width={r * 2}
         align="center"
-        x={-TOKEN_RADIUS}
-        y={-7}
+        x={-r}
+        y={Math.round(-7 * tokenScale)}
         listening={false}
       />
 
@@ -143,7 +178,7 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
         <>
           <Rect
             x={-42}
-            y={TOKEN_RADIUS + 3}
+            y={r + 3}
             width={84}
             height={14}
             cornerRadius={3}
@@ -158,10 +193,32 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget }) 
             width={84}
             align="center"
             x={-42}
-            y={TOKEN_RADIUS + 5}
+            y={r + 5}
             listening={false}
           />
         </>
+      )}
+
+      {/* Mobile delete badge — shown on selected token as alternative to right-click */}
+      {selected && isMobile && (
+        <Group
+          x={r * 0.65}
+          y={-r * 0.65}
+          onClick={handleDeleteBadge}
+          onTap={handleDeleteBadge}
+        >
+          <Circle radius={8} fill="#ef4444" />
+          <Text
+            text="✕"
+            fontSize={8}
+            fill="#ffffff"
+            width={16}
+            align="center"
+            x={-8}
+            y={-5}
+            listening={false}
+          />
+        </Group>
       )}
     </Group>
   )

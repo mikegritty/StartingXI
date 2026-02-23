@@ -25,20 +25,20 @@ export default function TopBar() {
         onChange={(e) => setBoardName(e.target.value)}
         className="text-sm text-text-primary bg-transparent border-b border-transparent
                    hover:border-border focus:border-accent-blue outline-none px-0.5 py-0.5
-                   min-w-32 max-w-64 transition-colors"
+                   min-w-20 max-w-[35vw] md:max-w-64 transition-colors"
         placeholder="Board name..."
       />
 
       <div className="ml-auto flex items-center gap-2">
         <button
-          className="text-[11px] px-3 py-1.5 rounded-md border border-border text-text-muted
+          className="hidden md:block text-[11px] px-3 py-1.5 rounded-md border border-border text-text-muted
                      hover:text-text-primary hover:border-text-muted transition-colors"
           title="Share (coming soon)"
         >
           Share
         </button>
         <button
-          className="text-[11px] px-3 py-1.5 rounded-md border border-border text-text-muted
+          className="hidden md:block text-[11px] px-3 py-1.5 rounded-md border border-border text-text-muted
                      hover:text-text-primary hover:border-text-muted transition-colors"
           title="Export PNG (coming soon)"
         >
