@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { useShallow } from 'zustand/react/shallow'
 import FormationPresets from '../players/FormationPresets'
 import { PHASES } from '../../data/phases'
 import { useBoardStore } from '../../store/boardStore'
@@ -473,8 +474,9 @@ function GamesSection() {
 }
 
 function SquadSection({ onOpenEditor }) {
-  const players  = useBoardStore((s) => s.board.players.filter((p) => p.team === 'home'))
-  const teamData = useBoardStore((s) => s.board.teams.home)
+  const allPlayers = useBoardStore(useShallow((s) => s.board.players))
+  const teamData   = useBoardStore(useShallow((s) => s.board.teams.home))
+  const players    = allPlayers.filter((p) => p.team === 'home')
 
   const starters = players.filter((p) => p.isStarter !== false)
   const subs     = players.filter((p) => p.isStarter === false)
