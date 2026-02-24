@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import FormationPresets from '../players/FormationPresets'
-import SquadEditor from '../squad/SquadEditor'
 import { PHASES } from '../../data/phases'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
+import GameDayModal from '../ui/GameDayModal'
 
 const PLAYS_KEY = 'startingxi_plays'
 const MAX_PLAYS = 20
@@ -83,8 +83,7 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
   const label                 = isHome ? 'Home' : 'Away'
 
   const [open, setOpen]                     = useState(defaultOpen)
-  const [squadOpen, setSquadOpen]           = useState(false)
-  const [instrOpen, setInstrOpen]           = useState(false)
+const [instrOpen, setInstrOpen]           = useState(false)
   const [instrDraft, setInstrDraft]         = useState('')
 
   // Sync draft when panel opens or instructions change externally
@@ -126,20 +125,6 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
           <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
 
-        {/* Edit Squad button — only when expanded */}
-        {open && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); setSquadOpen(true) }}
-            onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setSquadOpen(true))}
-            className="text-[10px] px-2 py-1 rounded border border-border
-                       text-text-muted hover:text-text-primary hover:border-accent-blue
-                       transition-colors cursor-pointer"
-          >
-            Edit Squad
-          </span>
-        )}
       </button>
 
       {/* ── Collapsible body ── */}
@@ -279,7 +264,6 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
         </div>
       )}
 
-      {squadOpen && <SquadEditor team={team} onClose={() => setSquadOpen(false)} />}
     </div>
   )
 }
@@ -514,7 +498,58 @@ export default function LeftPanel({ collapsed = false, onExpand }) {
           <MyPlays />
         </div>
 
+        {/* Game Day */}
+        <div className="mt-4 pt-4 border-t border-border">
+          <GameDaySection />
+        </div>
+
       </div>
     </aside>
+  )
+}
+
+// ── GameDaySection ─────────────────────────────────────────────────────────────
+
+function GameDaySection() {
+  const boardType    = useBoardStore((s) => s.board.type)
+  const gameDayMeta  = useBoardStore((s) => s.board.gameDayMeta)
+  const [modalOpen, setModalOpen] = useState(false)
+  const isGameDay = boardType === 'gameday'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+          Game Day
+        </span>
+        <button
+          onClick={() => setModalOpen(true)}
+          className={`text-[10px] px-2 py-1 rounded border transition-colors
+            ${isGameDay
+              ? 'border-accent-blue/50 bg-accent-blue/10 text-accent-blue'
+              : 'border-border text-text-muted hover:text-text-primary hover:border-text-muted'
+            }`}
+        >
+          {isGameDay ? 'Edit' : 'Set up'}
+        </button>
+      </div>
+
+      {isGameDay && gameDayMeta ? (
+        <div className="text-[11px] text-text-muted space-y-0.5">
+          <div className="text-text-primary font-medium">
+            {gameDayMeta.teamName} vs {gameDayMeta.opponentName}
+          </div>
+          {gameDayMeta.matchDate && (
+            <div>{new Date(gameDayMeta.matchDate + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+          )}
+        </div>
+      ) : (
+        <p className="text-[11px] text-text-muted/60 leading-snug">
+          Set match details to enable sharing a live game day view.
+        </p>
+      )}
+
+      {modalOpen && <GameDayModal onClose={() => setModalOpen(false)} />}
+    </div>
   )
 }

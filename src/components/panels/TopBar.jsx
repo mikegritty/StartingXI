@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import GameDayModal    from '../ui/GameDayModal'
 import PublishModal    from '../ui/PublishModal'
 import ShareModal      from '../ui/ShareModal'
 import SharedLinksPanel from '../ui/SharedLinksPanel'
@@ -13,7 +12,6 @@ export default function TopBar({ onToggleLeftPanel }) {
   const setTeamNotesOpen  = useSettingsStore((s) => s.setTeamNotesPanelOpen)
 
   // Modal states
-  const [gameDayOpen,   setGameDayOpen]   = useState(false)
   const [publishOpen,   setPublishOpen]   = useState(false)
   const [shareOpen,     setShareOpen]     = useState(false)
   const [linksOpen,     setLinksOpen]     = useState(false)
@@ -81,19 +79,6 @@ export default function TopBar({ onToggleLeftPanel }) {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Game Day button — opens setup modal */}
-        <button
-          onClick={() => setGameDayOpen(true)}
-          className={`hidden md:block text-[11px] px-3 py-1.5 rounded-md border transition-colors
-            ${isGameDay
-              ? 'border-accent-blue/50 bg-accent-blue/10 text-accent-blue'
-              : 'border-border text-text-muted hover:text-text-primary hover:border-text-muted'
-            }`}
-          title="Set up as a Game Day tactic"
-        >
-          🗓️ {isGameDay ? 'Game Day ✓' : 'Game Day'}
-        </button>
-
         {/* Publish & Share — only shown for game day boards */}
         {isGameDay && (
           <button
@@ -106,7 +91,7 @@ export default function TopBar({ onToggleLeftPanel }) {
               <path d="M7 1v8M4 4l3-3 3 3"/>
               <path d="M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2"/>
             </svg>
-            Publish & Share
+            Share
           </button>
         )}
 
@@ -130,15 +115,6 @@ export default function TopBar({ onToggleLeftPanel }) {
           Match Sheet
         </button>
 
-        {/* Export */}
-        <button
-          className="hidden md:block text-[11px] px-3 py-1.5 rounded-md border border-border text-text-muted
-                     hover:text-text-primary hover:border-text-muted transition-colors"
-          title="Export PNG (coming soon)"
-        >
-          Export
-        </button>
-
         {/* Save */}
         <button
           className="text-[11px] px-3 py-1.5 rounded-md bg-accent-blue text-white
@@ -150,7 +126,6 @@ export default function TopBar({ onToggleLeftPanel }) {
       </div>
 
       {/* Modals */}
-      {gameDayOpen  && <GameDayModal    onClose={() => setGameDayOpen(false)} />}
       {publishOpen  && <PublishModal    onClose={() => setPublishOpen(false)} onPublished={handlePublished} />}
       {shareOpen    && publishedSlug && (
         <ShareModal

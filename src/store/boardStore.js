@@ -2,6 +2,30 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import { useSettingsStore } from './settingsStore'
 
+// Default home team in 4-2-3-1 — always shown on a fresh board so the pitch is never empty.
+const DEFAULT_4231 = [
+  { role: 'GK',  position: 'GK',  number: 1,  x: 0.50, y: 0.93 },
+  { role: 'DEF', position: 'RB',  number: 2,  x: 0.15, y: 0.75 },
+  { role: 'DEF', position: 'CB',  number: 5,  x: 0.38, y: 0.78 },
+  { role: 'DEF', position: 'CB',  number: 6,  x: 0.62, y: 0.78 },
+  { role: 'DEF', position: 'LB',  number: 3,  x: 0.85, y: 0.75 },
+  { role: 'MID', position: 'CDM', number: 4,  x: 0.35, y: 0.60 },
+  { role: 'MID', position: 'CDM', number: 8,  x: 0.65, y: 0.60 },
+  { role: 'MID', position: 'RW',  number: 7,  x: 0.18, y: 0.42 },
+  { role: 'MID', position: 'CAM', number: 10, x: 0.50, y: 0.40 },
+  { role: 'MID', position: 'LW',  number: 11, x: 0.82, y: 0.42 },
+  { role: 'FWD', position: 'ST',  number: 9,  x: 0.50, y: 0.20 },
+].map((p) => ({
+  id: uuidv4(),
+  team: 'home',
+  name: '',
+  isStarter: true,
+  selected: false,
+  note: '',
+  phasePositions: {},
+  ...p,
+}))
+
 const DEFAULT_BOARD = {
   id: uuidv4(),
   name: 'New Board',
@@ -20,7 +44,7 @@ const DEFAULT_BOARD = {
   // players: tactical label string e.g. "CDM", "CB", "ST"
   //   isStarter = boolean; true = on pitch canvas, false = substitute bench
   //   note      = coach instructions for this player (plain text, max 500 chars)
-  players: [],
+  players: DEFAULT_4231,
   // drawings: array of drawing objects (pass, run, dribble, zone, highlight, text)
   // All positional values normalized 0–1 relative to pitchRect width/height
   drawings: [],
@@ -33,7 +57,7 @@ const DEFAULT_BOARD = {
         index: 0,
         label: 'Frame 1',
         phase: null,
-        players: [],
+        players: DEFAULT_4231.map((p) => ({ ...p })),
         drawings: [],
         duration: 1.5,
       },
