@@ -424,8 +424,13 @@ function MyPlays() {
 // ── Main LeftPanel ────────────────────────────────────────────────────────────
 
 export default function LeftPanel({ collapsed = false, onExpand }) {
+  const homeColor = useBoardStore((s) => s.board.teams.home.primaryColor)
+  const awayColor = useBoardStore((s) => s.board.teams.away.primaryColor)
+
   // Collapsed icon rail (desktop only)
   if (collapsed) {
+    const btnCls = `w-8 flex flex-col items-center justify-center gap-0.5 py-1 rounded-md
+                    text-text-muted hover:text-text-primary hover:bg-surface transition-colors`
     return (
       <aside className="w-10 shrink-0 border-r border-border bg-panel flex flex-col items-center py-3 gap-1">
         {/* Hamburger — expand */}
@@ -442,43 +447,44 @@ export default function LeftPanel({ collapsed = false, onExpand }) {
 
         <div className="w-5 h-px bg-border my-1" />
 
-        {/* Home + Away icons */}
-        <button
-          onClick={onExpand}
-          title="Home team"
-          className="w-8 h-8 flex items-center justify-center rounded-md
-                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
-        >
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="7" cy="5" r="2.5"/>
-            <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
-          </svg>
+        {/* Home team icon — person + color dot + label */}
+        <button onClick={onExpand} title="Home team" className={btnCls}>
+          <div className="relative">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="7" cy="5" r="2.5"/>
+              <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+            </svg>
+            <div
+              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-panel"
+              style={{ backgroundColor: homeColor }}
+            />
+          </div>
+          <span className="text-[6px] leading-none">Home</span>
         </button>
 
-        <button
-          onClick={onExpand}
-          title="Away team"
-          className="w-8 h-8 flex items-center justify-center rounded-md
-                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
-        >
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="7" cy="5" r="2.5"/>
-            <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
-          </svg>
+        {/* Away team icon — person + color dot + label */}
+        <button onClick={onExpand} title="Away team" className={btnCls}>
+          <div className="relative">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="7" cy="5" r="2.5"/>
+              <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+            </svg>
+            <div
+              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-panel"
+              style={{ backgroundColor: awayColor }}
+            />
+          </div>
+          <span className="text-[6px] leading-none">Away</span>
         </button>
 
         <div className="flex-1" />
 
-        {/* My Plays icon */}
-        <button
-          onClick={onExpand}
-          title="My Plays"
-          className="w-8 h-8 flex items-center justify-center rounded-md
-                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
-        >
+        {/* My Plays — bookmark icon + label */}
+        <button onClick={onExpand} title="My Plays" className={btnCls}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 4h10M2 7h10M2 10h6"/>
+            <path d="M3 2h8a1 1 0 011 1v9l-4-2.5L4 12V3a1 1 0 011-1z"/>
           </svg>
+          <span className="text-[6px] leading-none">Plays</span>
         </button>
       </aside>
     )
