@@ -2,6 +2,27 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import { useSettingsStore } from './settingsStore'
 
+// ── Squad persistence ─────────────────────────────────────────────────────────
+// The home squad (players, team name/colors, home instructions) is saved
+// independently of boards so it survives game loads and app restarts.
+const SQUAD_KEY = 'startingxi_home_squad'
+
+function loadSquadFromStorage() {
+  try { return JSON.parse(localStorage.getItem(SQUAD_KEY) ?? 'null') }
+  catch { return null }
+}
+
+function saveSquadToStorage(board) {
+  try {
+    const snap = {
+      players:          board.players.filter((p) => p.team === 'home'),
+      homeTeam:         board.teams.home,
+      homeInstructions: board.teamInstructions?.home ?? '',
+    }
+    localStorage.setItem(SQUAD_KEY, JSON.stringify(snap))
+  } catch { /* ignore */ }
+}
+
 // Default home team in 4-2-3-1 — always shown on a fresh board so the pitch is never empty.
 const DEFAULT_4231 = [
   { role: 'GK',  position: 'GK',  number: 1,  x: 0.50, y: 0.93 },
@@ -31,6 +52,14 @@ function todayName() {
   return `New Game ${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
 }
 
+// Seed board with persisted squad if available, otherwise use DEFAULT_4231 + defaults
+const _savedSquad = loadSquadFromStorage()
+const _initHomePlayers = _savedSquad?.players?.length ? _savedSquad.players : DEFAULT_4231
+const _initHomeTeam   = _savedSquad?.homeTeam
+  ? { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff', ..._savedSquad.homeTeam }
+  : { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff' }
+const _initHomeInstr  = _savedSquad?.homeInstructions ?? ''
+
 const DEFAULT_BOARD = {
   id: uuidv4(),
   name: todayName(),
@@ -43,13 +72,13 @@ const DEFAULT_BOARD = {
     zoneOverlay: 'none', // 'none' | 'classic' | 'thirds' | 'zones5' | 'zones18'
   },
   teams: {
-    home: { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff' },
+    home: _initHomeTeam,
     away: { name: 'Away Team', primaryColor: '#dc2626', secondaryColor: '#ffffff' },
   },
   // players: tactical label string e.g. "CDM", "CB", "ST"
   //   isStarter = boolean; true = on pitch canvas, false = substitute bench
   //   note      = coach instructions for this player (plain text, max 500 chars)
-  players: DEFAULT_4231,
+  players: _initHomePlayers,
   // drawings: array of drawing objects (pass, run, dribble, zone, highlight, text)
   // All positional values normalized 0–1 relative to pitchRect width/height
   drawings: [],
@@ -62,7 +91,7 @@ const DEFAULT_BOARD = {
         index: 0,
         label: 'Frame 1',
         phase: null,
-        players: DEFAULT_4231.map((p) => ({ ...p })),
+        players: _initHomePlayers.map((p) => ({ ...p })),
         drawings: [],
         duration: 1.5,
       },
@@ -74,7 +103,7 @@ const DEFAULT_BOARD = {
   equipment: [],
   labels: [],
   // teamInstructions: tactical guidance text per team (auto-filled from formation, editable)
-  teamInstructions: { home: '', away: '' },
+  teamInstructions: { home: _initHomeInstr, away: '' },
 }
 
 export const useBoardStore = create((set, get) => ({
@@ -96,12 +125,14 @@ export const useBoardStore = create((set, get) => ({
     set((s) => ({ board: { ...s.board, pitch: { ...s.board.pitch, zoneOverlay } } })),
 
   setTeam: (side, teamData) =>
-    set((s) => ({
-      board: {
+    set((s) => {
+      const board = {
         ...s.board,
         teams: { ...s.board.teams, [side]: { ...s.board.teams[side], ...teamData } },
-      },
-    })),
+      }
+      if (side === 'home') saveSquadToStorage(board)
+      return { board }
+    }),
 
   addPlayer: (player) =>
     set((s) => ({
@@ -130,21 +161,23 @@ export const useBoardStore = create((set, get) => ({
   movePlayer: (id, x, y) =>
     set((s) => {
       const activePhase = useSettingsStore.getState().activePhase
-      return {
-        board: {
-          ...s.board,
-          players: s.board.players.map((p) =>
-            p.id !== id ? p : {
-              ...p,
-              x,
-              y,
-              phasePositions: activePhase
-                ? { ...p.phasePositions, [activePhase]: { x, y } }
-                : p.phasePositions,
-            }
-          ),
-        },
+      const board = {
+        ...s.board,
+        players: s.board.players.map((p) =>
+          p.id !== id ? p : {
+            ...p,
+            x,
+            y,
+            phasePositions: activePhase
+              ? { ...p.phasePositions, [activePhase]: { x, y } }
+              : p.phasePositions,
+          }
+        ),
       }
+      // Persist squad when a home player is moved (captures dragged positions + phase positions)
+      const moved = s.board.players.find((p) => p.id === id)
+      if (moved?.team === 'home') saveSquadToStorage(board)
+      return { board }
     }),
 
   // Switch between tactical phases, saving current positions into prevPhase and
@@ -170,12 +203,16 @@ export const useBoardStore = create((set, get) => ({
     }),
 
   updatePlayer: (id, patch) =>
-    set((s) => ({
-      board: {
+    set((s) => {
+      const board = {
         ...s.board,
         players: s.board.players.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-      },
-    })),
+      }
+      // Persist squad whenever a home player changes
+      const changed = s.board.players.find((p) => p.id === id)
+      if (changed?.team === 'home') saveSquadToStorage(board)
+      return { board }
+    }),
 
   // Update a player's match note
   updatePlayerNote: (id, note) =>
@@ -187,12 +224,14 @@ export const useBoardStore = create((set, get) => ({
     })),
 
   setTeamInstructions: (team, text) =>
-    set((s) => ({
-      board: {
+    set((s) => {
+      const board = {
         ...s.board,
         teamInstructions: { ...s.board.teamInstructions, [team]: text },
-      },
-    })),
+      }
+      if (team === 'home') saveSquadToStorage(board)
+      return { board }
+    }),
 
   selectPlayer: (id) =>
     set((s) => ({
@@ -225,12 +264,12 @@ export const useBoardStore = create((set, get) => ({
         return { ...base, note: old.note ?? '' }
       })
 
-      return {
-        board: {
-          ...s.board,
-          players: [...otherTeam, ...merged, ...teamSubs],
-        },
+      const board = {
+        ...s.board,
+        players: [...otherTeam, ...merged, ...teamSubs],
       }
+      if (team === 'home') saveSquadToStorage(board)
+      return { board }
     }),
 
   // Swap a sub onto the pitch in place of a starter.
@@ -258,15 +297,17 @@ export const useBoardStore = create((set, get) => ({
 
   // Bulk-replace the entire squad for a team (used by SquadEditor on Save)
   setSquad: (team, players) =>
-    set((s) => ({
-      board: {
+    set((s) => {
+      const board = {
         ...s.board,
         players: [
           ...s.board.players.filter((p) => p.team !== team),
           ...players,
         ],
-      },
-    })),
+      }
+      if (team === 'home') saveSquadToStorage(board)
+      return { board }
+    }),
 
   // ── Drawing actions ──────────────────────────────────────────────────────
 
@@ -305,25 +346,40 @@ export const useBoardStore = create((set, get) => ({
 
   // Replace the entire board (used by My Plays load).
   // Merges with DEFAULT_BOARD so old saves missing new fields still work correctly.
-  loadBoard: (board) => set({
-    board: {
-      ...DEFAULT_BOARD,
-      ...board,
-      pitch: { ...DEFAULT_BOARD.pitch, ...(board.pitch ?? {}) },
-      teams: {
-        home: { ...DEFAULT_BOARD.teams.home, ...(board.teams?.home ?? {}) },
-        away: { ...DEFAULT_BOARD.teams.away, ...(board.teams?.away ?? {}) },
+  // Home squad (players + team settings) is always taken from the persisted squad
+  // so the coach's roster follows them across game loads.
+  loadBoard: (board) => {
+    const squad = loadSquadFromStorage()
+    const homePlayers = squad?.players?.length
+      ? squad.players
+      : (board.players ?? DEFAULT_BOARD.players).filter((p) => p.team === 'home')
+    const awayPlayers = (board.players ?? DEFAULT_BOARD.players).filter((p) => p.team === 'away')
+    const homeTeam = squad?.homeTeam
+      ? { ...DEFAULT_BOARD.teams.home, ...squad.homeTeam }
+      : { ...DEFAULT_BOARD.teams.home, ...(board.teams?.home ?? {}) }
+    const homeInstr = squad?.homeInstructions ?? board.teamInstructions?.home ?? ''
+
+    return set({
+      board: {
+        ...DEFAULT_BOARD,
+        ...board,
+        pitch: { ...DEFAULT_BOARD.pitch, ...(board.pitch ?? {}) },
+        teams: {
+          home: homeTeam,
+          away: { ...DEFAULT_BOARD.teams.away, ...(board.teams?.away ?? {}) },
+        },
+        players: [...homePlayers, ...awayPlayers],
+        play: {
+          ...DEFAULT_BOARD.play,
+          ...(board.play ?? {}),
+        },
+        teamInstructions: {
+          home: homeInstr,
+          away: board.teamInstructions?.away ?? '',
+        },
       },
-      play: {
-        ...DEFAULT_BOARD.play,
-        ...(board.play ?? {}),
-      },
-      teamInstructions: {
-        home: board.teamInstructions?.home ?? '',
-        away: board.teamInstructions?.away ?? '',
-      },
-    },
-  }),
+    })
+  },
 
   // Snapshot the live canvas into a new frame and jump to it.
   // Frame 0 always exists as base — additional frames are added here.

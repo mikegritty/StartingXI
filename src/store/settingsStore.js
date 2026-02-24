@@ -40,8 +40,11 @@ export const useSettingsStore = create((set) => ({
   // 'build' | 'progress' | 'final' | 'defend' | 'transition' | null
   activePhase: null,
 
-  // Active formation key per team (replaces old activeFormations[team][phase])
-  activeFormationKey: { home: null, away: null },
+  // Active formation key per team. Home formation persisted to localStorage.
+  activeFormationKey: (() => {
+    try { return { home: localStorage.getItem('activeFormationKey_home') || null, away: null } }
+    catch { return { home: null, away: null } }
+  })(),
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setShowPlayerNames: (v) => set({ showPlayerNames: v }),
@@ -69,10 +72,17 @@ export const useSettingsStore = create((set) => ({
   setActivePhase: (phase) =>
     set((s) => ({ activePhase: s.activePhase === phase ? null : phase })),
 
-  setActiveFormationKey: (team, key) =>
-    set((s) => ({
+  setActiveFormationKey: (team, key) => {
+    if (team === 'home') {
+      try {
+        if (key) localStorage.setItem('activeFormationKey_home', key)
+        else localStorage.removeItem('activeFormationKey_home')
+      } catch { /* ignore */ }
+    }
+    return set((s) => ({
       activeFormationKey: { ...s.activeFormationKey, [team]: key },
-    })),
+    }))
+  },
 
   openConfirmDialog: (pendingFormationApply) =>
     set({ confirmDialogOpen: true, pendingFormationApply }),

@@ -1,9 +1,69 @@
+import { useRef, useState, useLayoutEffect } from 'react'
 import { Group, Circle, Text, Rect } from 'react-konva'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { normToPixel, pixelToNorm, clampNorm } from '../../utils/positions'
 
 const TOKEN_RADIUS = 18  // 36px diameter — base size, scaled via tokenScale prop
+
+// Max pixel width of the name pill (same as the Text container width)
+const NAME_LABEL_MAX_W = 80
+const NAME_FONT_SIZE   = 9.5
+const NAME_PAD_X       = 6   // horizontal padding inside the pill (each side)
+const NAME_PAD_Y       = 2   // vertical padding inside the pill (each side)
+
+/**
+ * NameLabel renders a dark pill behind the player's name.
+ * Width is proportional to the text width (capped at NAME_LABEL_MAX_W).
+ * Long names wrap onto a second line, centered.
+ *
+ * Konva Text nodes expose textWidth / textHeight after mount via a ref,
+ * so we measure in a layout effect and update the Rect dimensions.
+ */
+function NameLabel({ name, r }) {
+  const textRef = useRef(null)
+  // Initial estimate so the Rect is visible on first render before measurement
+  const [dims, setDims] = useState({ w: NAME_LABEL_MAX_W, h: NAME_FONT_SIZE + NAME_PAD_Y * 2 })
+
+  useLayoutEffect(() => {
+    if (!textRef.current) return
+    const node = textRef.current
+    // textWidth = width of the longest line; height = total rendered height
+    const tw = Math.min(node.textWidth + NAME_PAD_X * 2, NAME_LABEL_MAX_W + NAME_PAD_X * 2)
+    const th = node.height() + NAME_PAD_Y * 2
+    setDims({ w: tw, h: th })
+  }, [name, r])
+
+  const w = dims.w
+  const h = dims.h
+
+  return (
+    <>
+      <Rect
+        x={-w / 2}
+        y={r + 3}
+        width={w}
+        height={h}
+        cornerRadius={3}
+        fill="rgba(0,0,0,0.55)"
+        listening={false}
+      />
+      <Text
+        ref={textRef}
+        text={name}
+        fontSize={NAME_FONT_SIZE}
+        fontFamily="Inter, system-ui, sans-serif"
+        fill="#ffffff"
+        width={NAME_LABEL_MAX_W}
+        align="center"
+        wrap="word"
+        x={-NAME_LABEL_MAX_W / 2}
+        y={r + 3 + NAME_PAD_Y}
+        listening={false}
+      />
+    </>
+  )
+}
 
 /**
  * Compute a contrasting text colour (black or white) for a given hex background.
@@ -208,30 +268,9 @@ export default function PlayerToken({
         listening={false}
       />
 
-      {/* Name label with dark pill background */}
+      {/* Name label with dark pill background — width fits text, wraps for long names */}
       {showNames && name && (
-        <>
-          <Rect
-            x={-42}
-            y={r + 3}
-            width={84}
-            height={14}
-            cornerRadius={3}
-            fill="rgba(0,0,0,0.55)"
-            listening={false}
-          />
-          <Text
-            text={name}
-            fontSize={9.5}
-            fontFamily="Inter, system-ui, sans-serif"
-            fill="#ffffff"
-            width={84}
-            align="center"
-            x={-42}
-            y={r + 5}
-            listening={false}
-          />
-        </>
+        <NameLabel name={name} r={r} />
       )}
 
       {/* Note indicator dot — shown when player has a note (top-left of token).
