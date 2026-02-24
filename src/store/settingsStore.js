@@ -22,6 +22,8 @@ export const useSettingsStore = create((set) => ({
   // When true, FrameTimeline shows the "Animate?" toast.
   // Set by any code path that adds a frame (Toolbar or FrameTimeline).
   frameToastPending: false,
+  // When true, FrameTimeline is in Animate mode (expanded, prominent play button, tools dimmed)
+  animateMode: false,
 
   // Left panel collapsed state (desktop only). Initialised from localStorage.
   leftPanelCollapsed: (() => {
@@ -45,6 +47,7 @@ export const useSettingsStore = create((set) => ({
   setTeamNotesPanelOpen: (v) => set({ teamNotesPanelOpen: v }),
   setIsPlaying: (v) => set({ isPlaying: v }),
   setFrameToastPending: (v) => set({ frameToastPending: v }),
+  setAnimateMode: (v) => set({ animateMode: v }),
 
   setLeftPanelCollapsed: (v) => {
     try { localStorage.setItem('leftPanelCollapsed', String(v)) } catch {}

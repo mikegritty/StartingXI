@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import FORMATIONS, { QUICK_FORMATIONS, buildFormationPlayers } from '../../data/formations'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
+
+// How long to show the "Update instructions?" toast (ms)
+const INSTRUCTIONS_TOAST_MS = 6000
 
 const ALL_FORMATION_KEYS = Object.keys(FORMATIONS)
 // Formations that appear in the "More formations…" dropdown (everything not in quick-pick)
@@ -21,11 +24,16 @@ const MOVED_THRESHOLD = 0.02
 export default function FormationPresets({ team }) {
   const players               = useBoardStore((s) => s.board.players)
   const applyFormation        = useBoardStore((s) => s.applyFormation)
+  const teamInstructions      = useBoardStore((s) => s.board.teamInstructions)
+  const setTeamInstructions   = useBoardStore((s) => s.setTeamInstructions)
   const openConfirmDialog     = useSettingsStore((s) => s.openConfirmDialog)
   const activeFormationKey    = useSettingsStore((s) => s.activeFormationKey[team])
   const setActiveFormationKey = useSettingsStore((s) => s.setActiveFormationKey)
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  // "Update instructions?" toast state — holds formationKey to update from, or null
+  const [instrToastKey, setInstrToastKey] = useState(null)
+  const instrToastTimerRef = useRef(null)
 
   const teamHasPlayers = players.some((p) => p.team === team)
 
@@ -47,6 +55,21 @@ export default function FormationPresets({ team }) {
     })
   })()
 
+  const applyInstructions = (formationKey) => {
+    const instrText = FORMATIONS[formationKey]?.instructions
+    if (!instrText) return
+    const current = teamInstructions?.[team] ?? ''
+    if (!current.trim()) {
+      // Instructions are empty — auto-fill
+      setTeamInstructions(team, instrText)
+    } else {
+      // Already filled — show "Update?" toast
+      clearTimeout(instrToastTimerRef.current)
+      setInstrToastKey(formationKey)
+      instrToastTimerRef.current = setTimeout(() => setInstrToastKey(null), INSTRUCTIONS_TOAST_MS)
+    }
+  }
+
   const handleSelect = (formationKey) => {
     setDropdownOpen(false)
     if (formationKey === activeFormationKey) return
@@ -57,6 +80,8 @@ export default function FormationPresets({ team }) {
       applyFormation(team, newPlayers)
       setActiveFormationKey(team, formationKey)
     }
+    // Always try to fill instructions after applying
+    applyInstructions(formationKey)
   }
 
   const handleCustom = () => {
@@ -72,6 +97,34 @@ export default function FormationPresets({ team }) {
       <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">
         Formation
       </p>
+
+      {/* "Update instructions?" toast */}
+      {instrToastKey && (
+        <div className="flex items-center gap-1.5 mb-1.5 px-2 py-1.5 rounded-md bg-surface border border-border text-[10px]">
+          <span className="text-text-muted flex-1 min-w-0 leading-snug">
+            Update instructions for {FORMATIONS[instrToastKey]?.label}?
+          </span>
+          <button
+            onClick={() => {
+              setTeamInstructions(team, FORMATIONS[instrToastKey]?.instructions ?? '')
+              clearTimeout(instrToastTimerRef.current)
+              setInstrToastKey(null)
+            }}
+            className="shrink-0 text-accent-blue hover:text-blue-400 font-semibold transition-colors"
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => {
+              clearTimeout(instrToastTimerRef.current)
+              setInstrToastKey(null)
+            }}
+            className="shrink-0 text-text-muted hover:text-text-primary transition-colors"
+          >
+            Keep
+          </button>
+        </div>
+      )}
 
       {/* Horizontal scrollable chip row */}
       <div

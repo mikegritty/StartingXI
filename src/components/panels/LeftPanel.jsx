@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import FormationPresets from '../players/FormationPresets'
 import SquadEditor from '../squad/SquadEditor'
@@ -70,16 +70,31 @@ function PhasePills() {
 
 // ── TeamSection ───────────────────────────────────────────────────────────────
 
-function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
-  const teamData     = useBoardStore((s) => s.board.teams[team])
-  const setTeam      = useBoardStore((s) => s.setTeam)
-  const showNames    = useSettingsStore((s) => s.showPlayerNames)
-  const setShowNames = useSettingsStore((s) => s.setShowPlayerNames)
-  const isHome       = team === 'home'
-  const label        = isHome ? 'Home' : 'Away'
+const MAX_INSTRUCTIONS = 500
 
-  const [open, setOpen]           = useState(defaultOpen)
-  const [squadOpen, setSquadOpen] = useState(false)
+function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
+  const teamData              = useBoardStore((s) => s.board.teams[team])
+  const setTeam               = useBoardStore((s) => s.setTeam)
+  const teamInstructions      = useBoardStore((s) => s.board.teamInstructions)
+  const setTeamInstructions   = useBoardStore((s) => s.setTeamInstructions)
+  const showNames             = useSettingsStore((s) => s.showPlayerNames)
+  const setShowNames          = useSettingsStore((s) => s.setShowPlayerNames)
+  const isHome                = team === 'home'
+  const label                 = isHome ? 'Home' : 'Away'
+
+  const [open, setOpen]                     = useState(defaultOpen)
+  const [squadOpen, setSquadOpen]           = useState(false)
+  const [instrOpen, setInstrOpen]           = useState(false)
+  const [instrDraft, setInstrDraft]         = useState('')
+
+  // Sync draft when panel opens or instructions change externally
+  useEffect(() => {
+    setInstrDraft(teamInstructions?.[team] ?? '')
+  }, [teamInstructions, team])
+
+  const handleInstrBlur = useCallback(() => {
+    setTeamInstructions(team, instrDraft.trim())
+  }, [team, instrDraft, setTeamInstructions])
 
   return (
     <div>
@@ -177,6 +192,61 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
 
           {/* Formation picker */}
           <FormationPresets team={team} />
+
+          {/* Instructions section */}
+          <div>
+            <button
+              onClick={() => setInstrOpen((o) => !o)}
+              className="w-full flex items-center gap-1.5 group"
+            >
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider
+                               group-hover:text-text-primary transition-colors">
+                Instructions
+              </span>
+              {!instrOpen && teamInstructions?.[team] && (
+                <span className="text-[9px] text-text-muted/60 font-normal normal-case tracking-normal truncate flex-1 text-left">
+                  {teamInstructions[team].slice(0, 30)}…
+                </span>
+              )}
+              <svg
+                width="8" height="8" viewBox="0 0 10 10" fill="none"
+                className={`ml-auto shrink-0 text-text-muted transition-transform group-hover:text-text-primary
+                  ${instrOpen ? '' : '-rotate-90'}`}
+              >
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+
+            {instrOpen && (
+              <div className="mt-1.5">
+                <textarea
+                  value={instrDraft}
+                  onChange={(e) => {
+                    if (e.target.value.length <= MAX_INSTRUCTIONS) setInstrDraft(e.target.value)
+                  }}
+                  onBlur={handleInstrBlur}
+                  rows={4}
+                  placeholder="Add tactical instructions for this team…"
+                  className="w-full resize-none rounded-md bg-surface border border-border
+                             text-[11px] text-text-primary placeholder:text-text-muted
+                             px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-accent-blue
+                             transition-shadow leading-relaxed"
+                />
+                <div className="flex justify-between items-center mt-0.5">
+                  <span className={`text-[9px] ${MAX_INSTRUCTIONS - instrDraft.length < 50 ? 'text-orange-400' : 'text-text-muted'}`}>
+                    {MAX_INSTRUCTIONS - instrDraft.length} chars left
+                  </span>
+                  <button
+                    onClick={handleInstrBlur}
+                    className="text-[9px] px-2 py-0.5 rounded bg-accent-blue text-white
+                               hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Tactical phase pills — only under Home team */}
           {isHome && (

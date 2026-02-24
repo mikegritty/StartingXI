@@ -35,6 +35,7 @@ const DEFAULT_BOARD = {
         phase: null,
         players: [],
         drawings: [],
+        duration: 1.5,
       },
     ],
     currentFrameIndex: 0,
@@ -43,6 +44,8 @@ const DEFAULT_BOARD = {
   },
   equipment: [],
   labels: [],
+  // teamInstructions: tactical guidance text per team (auto-filled from formation, editable)
+  teamInstructions: { home: '', away: '' },
 }
 
 export const useBoardStore = create((set, get) => ({
@@ -151,6 +154,14 @@ export const useBoardStore = create((set, get) => ({
       board: {
         ...s.board,
         players: s.board.players.map((p) => (p.id === id ? { ...p, note } : p)),
+      },
+    })),
+
+  setTeamInstructions: (team, text) =>
+    set((s) => ({
+      board: {
+        ...s.board,
+        teamInstructions: { ...s.board.teamInstructions, [team]: text },
       },
     })),
 
@@ -278,6 +289,10 @@ export const useBoardStore = create((set, get) => ({
         ...DEFAULT_BOARD.play,
         ...(board.play ?? {}),
       },
+      teamInstructions: {
+        home: board.teamInstructions?.home ?? '',
+        away: board.teamInstructions?.away ?? '',
+      },
     },
   }),
 
@@ -306,6 +321,7 @@ export const useBoardStore = create((set, get) => ({
         phase: currentFrame?.phase ?? null,
         players:  structuredClone(s.board.players),
         drawings: structuredClone(s.board.drawings),
+        duration: 1.5,
       }
       return {
         board: {

@@ -12,11 +12,12 @@ import DrawingElement from './DrawingElement'
  *   - In 'select' tool mode: tap a drawing to select it, drag handles to edit endpoints.
  *   - In any other tool mode: drawings are non-interactive (drawing/eraser takes over).
  *
- * @param {object} pitchRect       - { x, y, width, height }
- * @param {Array}  [drawings]      - optional override (used in readOnly / frame preview)
- * @param {boolean} [readOnly]     - if true, layer is purely decorative
+ * @param {object}   pitchRect       - { x, y, width, height }
+ * @param {Array}    [drawings]      - optional override (used in readOnly / frame preview)
+ * @param {boolean}  [readOnly]      - if true, layer is purely decorative
+ * @param {function} [onEditDrawing] - (id) => void — called when user double-clicks a text drawing
  */
-export default function DrawingLayer({ pitchRect, drawings: drawingsProp, readOnly = false }) {
+export default function DrawingLayer({ pitchRect, drawings: drawingsProp, readOnly = false, onEditDrawing }) {
   const storeDrawings      = useBoardStore(useShallow((s) => s.board.drawings))
   const updateDrawing      = useBoardStore((s) => s.updateDrawing)
   const removeDrawing      = useBoardStore((s) => s.removeDrawing)
@@ -43,6 +44,11 @@ export default function DrawingLayer({ pitchRect, drawings: drawingsProp, readOn
     updateDrawing(id, patch)
   }
 
+  const handleEdit = (id) => {
+    if (!isSelectMode || !onEditDrawing) return
+    onEditDrawing(id)
+  }
+
   // The layer itself needs to listen only in select mode (for click-through deselect)
   // Individual element listening is handled per DrawingElement based on readOnly
   return (
@@ -57,6 +63,7 @@ export default function DrawingLayer({ pitchRect, drawings: drawingsProp, readOn
           onSelect={() => handleSelect(d.id)}
           onDelete={() => handleDelete(d.id)}
           onUpdate={(patch) => handleUpdate(d.id, patch)}
+          onEdit={() => handleEdit(d.id)}
         />
       ))}
     </Layer>

@@ -155,6 +155,17 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
     })
   }, [currentFrameIndex]) // eslint-disable-line
 
+  // ── Text drawing edit state ───────────────────────────────────────────────
+  // When set, shows the TextInputOverlay pre-filled for editing an existing text drawing.
+  const [editingDrawingId, setEditingDrawingId] = useState(null)
+  const updateDrawing  = useBoardStore((s) => s.updateDrawing)
+  const storeDrawings  = useBoardStore((s) => s.board.drawings)
+  const editingDrawing = storeDrawings.find((d) => d.id === editingDrawingId) ?? null
+
+  const handleEditDrawing = (id) => {
+    setEditingDrawingId(id)
+  }
+
   // ── Drawing pointer hook ──────────────────────────────────────────────────
 
   const { preview, textPending, clearTextPending, handlers: drawHandlers } =
@@ -276,6 +287,7 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
           pitchRect={pitchRect}
           drawings={readOnly ? (boardProp?.drawings ?? []) : undefined}
           readOnly={readOnly}
+          onEditDrawing={readOnly ? undefined : handleEditDrawing}
         />
 
         {/* Live preview while drawing */}
@@ -293,11 +305,27 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
         />
       </Stage>
 
-      {/* Text input overlay — DOM element, positioned over canvas */}
+      {/* Text input overlay — DOM element, positioned over canvas (new text) */}
       {!readOnly && textPending && (
         <TextInputOverlay
           textPending={textPending}
           onClose={clearTextPending}
+          pitchRect={pitchRect}
+          containerRef={containerRef}
+        />
+      )}
+
+      {/* Text edit overlay — pre-filled for editing an existing text drawing */}
+      {!readOnly && editingDrawing && (
+        <TextInputOverlay
+          textPending={{ nx: editingDrawing.nx, ny: editingDrawing.ny }}
+          initialText={editingDrawing.text}
+          onClose={(newText) => {
+            if (newText && newText !== editingDrawing.text) {
+              updateDrawing(editingDrawing.id, { text: newText })
+            }
+            setEditingDrawingId(null)
+          }}
           pitchRect={pitchRect}
           containerRef={containerRef}
         />

@@ -8,30 +8,37 @@ import { useSettingsStore } from '../../store/settingsStore'
  * TextInputOverlay — DOM textarea that appears over the canvas when the text
  * tool is active and the user clicks on the pitch.
  *
+ * Also used for editing existing text drawings when initialText is provided.
+ * In that case onClose receives the committed text string (or null on cancel).
+ *
  * Positioning is computed from the container element's bounding rect +
  * the normalized click coordinates converted to pixels, then clamped so
  * the overlay never overflows the right/bottom edge of the viewport.
  *
  * Note: The text tool is desktop-primary (requires a keyboard). On mobile
- * it still works but the soft keyboard will shift the layout; we show it
- * positioned at the top of the screen in that case.
+ * it still works but the soft keyboard will shift the layout.
  *
  * @param {object}   textPending     - { nx, ny } in normalized coords
- * @param {function} onClose         - call to dismiss the overlay
+ * @param {string}   [initialText]   - pre-filled text (edit mode)
+ * @param {function} onClose         - (text?) => void — text provided only in edit mode
  * @param {object}   pitchRect       - { x, y, width, height }
  * @param {object}   containerRef    - ref to the canvas container div
  */
-export default function TextInputOverlay({ textPending, onClose, pitchRect, containerRef }) {
+export default function TextInputOverlay({ textPending, initialText, onClose, pitchRect, containerRef }) {
   const textareaRef  = useRef(null)
   const addDrawing   = useBoardStore((s) => s.addDrawing)
   const drawColor    = useSettingsStore((s) => s.drawColor)
+  const isEditMode   = initialText !== undefined
 
-  // Auto-focus when the overlay appears
+  // Auto-focus and select all when the overlay appears
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus()
+      if (isEditMode) {
+        textareaRef.current.select()
+      }
     }
-  }, [textPending])
+  }, [textPending]) // eslint-disable-line
 
   if (!textPending || !pitchRect) return null
 
@@ -49,17 +56,23 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
 
   const commit = () => {
     const text = textareaRef.current?.value?.trim()
-    if (text) {
-      addDrawing({
-        id:    uuidv4(),
-        type:  'text',
-        nx:    textPending.nx,
-        ny:    textPending.ny,
-        text,
-        color: drawColor,
-      })
+    if (isEditMode) {
+      // Edit mode: pass text back to caller (even if empty — caller decides)
+      onClose(text || null)
+    } else {
+      // New text mode: add drawing to board
+      if (text) {
+        addDrawing({
+          id:    uuidv4(),
+          type:  'text',
+          nx:    textPending.nx,
+          ny:    textPending.ny,
+          text,
+          color: drawColor,
+        })
+      }
+      onClose()
     }
-    onClose()
   }
 
   const handleKeyDown = (e) => {
@@ -68,7 +81,8 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
       commit()
     }
     if (e.key === 'Escape') {
-      onClose()
+      if (isEditMode) onClose(null)
+      else onClose()
     }
   }
 
@@ -84,6 +98,7 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
       <textarea
         ref={textareaRef}
         onKeyDown={handleKeyDown}
+        defaultValue={initialText ?? ''}
         rows={1}
         maxLength={120}
         placeholder="Type text…"

@@ -18,7 +18,8 @@ const DEL_R      = 10  // px — delete badge radius
  * @param {boolean}  [readOnly=false]
  * @param {function} [onSelect]   - () => void — called on tap/click
  * @param {function} [onDelete]   - () => void
- * @param {function} [onUpdate]   - (patch) => void — patch: { x1,y1,x2,y2 } normalized
+ * @param {function} [onUpdate]   - (patch) => void — patch normalized coords or fontSize
+ * @param {function} [onEdit]     - () => void — called on double-click of text drawing
  */
 export default function DrawingElement({
   drawing,
@@ -29,9 +30,10 @@ export default function DrawingElement({
   onSelect,
   onDelete,
   onUpdate,
+  onEdit,
 }) {
   const { type, color } = drawing
-  const sharedProps = { selected, readOnly, onSelect, onDelete, onUpdate, pitchRect, opacity }
+  const sharedProps = { selected, readOnly, onSelect, onDelete, onUpdate, onEdit, pitchRect, opacity }
 
   if (type === 'pass') {
     return <ArrowDrawing drawing={drawing} dashed={false} curved={false} color={color} {...sharedProps} />
@@ -52,7 +54,7 @@ export default function DrawingElement({
     return <FreeDrawing drawing={drawing} color={color} {...sharedProps} />
   }
   if (type === 'text') {
-    return <TextDrawing drawing={drawing} color={color} {...sharedProps} />
+    return <TextDrawing drawing={drawing} color={color} onEdit={onEdit} {...sharedProps} />
   }
   return null
 }
@@ -340,30 +342,62 @@ function FreeDrawing({ drawing, pitchRect, color, opacity, selected, readOnly, o
 
 // ── Text annotation ───────────────────────────────────────────────────────────
 
-function TextDrawing({ drawing, pitchRect, color, opacity, selected, readOnly, onSelect, onDelete }) {
+const MIN_FONT_SIZE = 10
+const MAX_FONT_SIZE = 28
+
+function TextDrawing({ drawing, pitchRect, color, opacity, selected, readOnly, onSelect, onDelete, onUpdate, onEdit }) {
   const { nx, ny, text } = drawing
+  const fontSize = drawing.fontSize ?? 14
   const { px, py } = normToPixel(nx, ny, pitchRect)
 
+  // Estimate text width for hit area and badge placement
+  const charWidth   = fontSize * 0.6
+  const textWidth   = Math.max(60, text.length * charWidth)
+  const textHeight  = fontSize + 6
+
+  const handleDragEnd = (e) => {
+    if (!onUpdate) return
+    const node = e.target
+    const nx2 = clampNorm((node.x() - pitchRect.x) / pitchRect.width)
+    const ny2 = clampNorm((node.y() - pitchRect.y) / pitchRect.height)
+    onUpdate({ nx: nx2, ny: ny2 })
+    // Reset node position so next render (from store) positions it correctly
+    node.position({ x: normToPixel(nx2, ny2, pitchRect).px, y: normToPixel(nx2, ny2, pitchRect).py })
+  }
+
+  const handleFontSizeChange = (delta) => {
+    const next = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, fontSize + delta))
+    onUpdate?.({ fontSize: next })
+  }
+
   return (
-    <Group>
+    <Group
+      x={px}
+      y={py}
+      draggable={selected && !readOnly}
+      onDragEnd={handleDragEnd}
+      onDragStart={(e) => { e.cancelBubble = true }}
+    >
       {/* Invisible background hit area */}
       {!readOnly && (
         <Rect
-          x={px - 4}
-          y={py - 4}
-          width={Math.max(60, text.length * 8)}
-          height={22}
+          x={-4}
+          y={-4}
+          width={textWidth + 8}
+          height={textHeight + 4}
           fill="transparent"
           onClick={onSelect}
           onTap={onSelect}
+          onDblClick={onEdit}
+          onDblTap={onEdit}
         />
       )}
       {selected && !readOnly && (
         <Rect
-          x={px - 4}
-          y={py - 4}
-          width={Math.max(60, text.length * 8)}
-          height={22}
+          x={-4}
+          y={-4}
+          width={textWidth + 8}
+          height={textHeight + 4}
           fill="rgba(96,165,250,0.12)"
           stroke="#60a5fa"
           strokeWidth={1}
@@ -372,10 +406,10 @@ function TextDrawing({ drawing, pitchRect, color, opacity, selected, readOnly, o
         />
       )}
       <Text
-        x={px}
-        y={py}
+        x={0}
+        y={0}
         text={text}
-        fontSize={14}
+        fontSize={fontSize}
         fontFamily="Inter, system-ui, sans-serif"
         fontStyle="bold"
         fill={selected ? '#60a5fa' : color}
@@ -387,8 +421,45 @@ function TextDrawing({ drawing, pitchRect, color, opacity, selected, readOnly, o
         listening={false}
       />
       {selected && !readOnly && (
-        <DeleteBadge x={px + Math.max(60, text.length * 8) / 2} y={py - 18} onDelete={onDelete} />
+        <>
+          {/* Delete badge — above centre */}
+          <DeleteBadge x={textWidth / 2} y={-18} onDelete={onDelete} />
+          {/* Font size −/+ badges */}
+          <FontSizeBadge x={-18} y={textHeight / 2} label="−" onClick={() => handleFontSizeChange(-2)} />
+          <FontSizeBadge x={textWidth + 8} y={textHeight / 2} label="+" onClick={() => handleFontSizeChange(2)} />
+        </>
       )}
+    </Group>
+  )
+}
+
+/**
+ * Small font size change badge (− or +).
+ */
+function FontSizeBadge({ x, y, label, onClick }) {
+  const handleClick = (e) => {
+    e.cancelBubble = true
+    onClick?.()
+  }
+  return (
+    <Group x={x} y={y} onClick={handleClick} onTap={handleClick}>
+      <Circle
+        radius={DEL_R}
+        fill="#374151"
+        stroke="rgba(255,255,255,0.2)"
+        strokeWidth={1}
+        shadowColor="rgba(0,0,0,0.6)"
+        shadowBlur={3}
+      />
+      <Text
+        text={label}
+        fontSize={10}
+        fontStyle="bold"
+        fill="white"
+        offsetX={label === '+' ? 4 : 3}
+        offsetY={5}
+        listening={false}
+      />
     </Group>
   )
 }
