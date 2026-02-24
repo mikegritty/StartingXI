@@ -9,7 +9,12 @@ import { useSettingsStore } from '../../store/settingsStore'
  * tool is active and the user clicks on the pitch.
  *
  * Positioning is computed from the container element's bounding rect +
- * the normalized click coordinates converted to pixels.
+ * the normalized click coordinates converted to pixels, then clamped so
+ * the overlay never overflows the right/bottom edge of the viewport.
+ *
+ * Note: The text tool is desktop-primary (requires a keyboard). On mobile
+ * it still works but the soft keyboard will shift the layout; we show it
+ * positioned at the top of the screen in that case.
  *
  * @param {object}   textPending     - { nx, ny } in normalized coords
  * @param {function} onClose         - call to dismiss the overlay
@@ -33,8 +38,14 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
   // Compute pixel position relative to the viewport
   const containerRect = containerRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
   const { px, py } = normToPixel(textPending.nx, textPending.ny, pitchRect)
-  const left = containerRect.left + px
-  const top  = containerRect.top  + py
+
+  // Clamp so the input (min-width ~80px, estimate ~24px tall) stays in viewport
+  const OVERLAY_W = 240
+  const OVERLAY_H = 32
+  const rawLeft = containerRect.left + px
+  const rawTop  = containerRect.top  + py
+  const left = Math.min(rawLeft, window.innerWidth  - OVERLAY_W - 8)
+  const top  = Math.min(rawTop,  window.innerHeight - OVERLAY_H - 8)
 
   const commit = () => {
     const text = textareaRef.current?.value?.trim()
@@ -63,13 +74,13 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
 
   return (
     <>
-      {/* Invisible backdrop — click to commit */}
+      {/* Invisible backdrop — click outside to commit */}
       <div
         className="fixed inset-0 z-50"
         onClick={commit}
       />
 
-      {/* Text input */}
+      {/* Text input — floats over the canvas at the click position */}
       <textarea
         ref={textareaRef}
         onKeyDown={handleKeyDown}
@@ -85,7 +96,6 @@ export default function TextInputOverlay({ textPending, onClose, pitchRect, cont
           color: drawColor,
           textShadow: '0 1px 3px rgba(0,0,0,0.9)',
           caretColor: drawColor,
-          // Auto-height via rows=1; grows with content via field-sizing or manual approach
           height: 'auto',
           overflow: 'hidden',
         }}

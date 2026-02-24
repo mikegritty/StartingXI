@@ -7,45 +7,42 @@ const MAX_NOTE = 500
 /**
  * PlayerNoteSheet — floating panel for editing per-player match instructions.
  *
- * On mobile: slides up from the bottom as a sheet.
- * On desktop: appears as a fixed panel in the bottom-right corner.
+ * On mobile: slides up from the bottom as a sheet, positioned ABOVE the toolbar.
+ *   - The panel uses bottom: calc(toolbar + optional-frame-bar + safe-area) so it
+ *     never overlaps the bottom UI bars.
+ * On desktop (md+): fixed card in the bottom-right corner.
  *
  * Opens when `notePlayerId` in settingsStore is non-null.
- * Closes when the user clicks the × button or presses Escape.
+ * Closes when the user taps the backdrop, taps ×, or presses Escape.
  */
 export default function PlayerNoteSheet() {
-  const notePlayerId   = useSettingsStore((s) => s.notePlayerId)
+  const notePlayerId    = useSettingsStore((s) => s.notePlayerId)
   const setNotePlayerId = useSettingsStore((s) => s.setNotePlayerId)
-  const players        = useBoardStore((s) => s.board.players)
+  const players         = useBoardStore((s) => s.board.players)
   const updatePlayerNote = useBoardStore((s) => s.updatePlayerNote)
+  const frames          = useBoardStore((s) => s.board.frames)
 
   const player = players.find((p) => p.id === notePlayerId) ?? null
 
-  // Local draft — synced from store when player changes
   const [draft, setDraft] = useState('')
   const textareaRef = useRef(null)
 
   useEffect(() => {
     if (player) {
       setDraft(player.note ?? '')
-      // Auto-focus after paint
       requestAnimationFrame(() => textareaRef.current?.focus())
     }
   }, [player?.id]) // eslint-disable-line
 
-  // Keyboard: Escape closes
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.key === 'Escape' && notePlayerId) {
-        handleClose()
-      }
+      if (e.key === 'Escape' && notePlayerId) handleClose()
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [notePlayerId]) // eslint-disable-line
 
   const handleClose = () => {
-    // Commit draft on close
     if (player) updatePlayerNote(player.id, draft.trim())
     setNotePlayerId(null)
   }
@@ -58,36 +55,48 @@ export default function PlayerNoteSheet() {
 
   const remaining = MAX_NOTE - draft.length
 
+  // On mobile the toolbar is 44px + optional FrameTimeline 40px + safe-area.
+  // Position the sheet above all of these so nothing is obscured.
+  const hasFrames = frames.length > 0
+  const mobileBottomOffset = hasFrames
+    ? 'calc(44px + 40px + env(safe-area-inset-bottom, 0px))'
+    : 'calc(44px + env(safe-area-inset-bottom, 0px))'
+
   return (
     <>
-      {/* Backdrop (mobile only) */}
+      {/* Backdrop — mobile only, sits under the sheet */}
       <div
         className="fixed inset-0 z-40 md:hidden bg-black/40"
         onClick={handleClose}
       />
 
       {/* Panel */}
+      {/* Mobile: width=100%, bottom sits above toolbar. Desktop: small card bottom-right. */}
       <div
-        className="
-          fixed z-50 bg-panel border border-border shadow-2xl
-          /* mobile: bottom sheet */
-          bottom-0 left-0 right-0 rounded-t-2xl
-          /* desktop: bottom-right corner card */
-          md:bottom-6 md:right-4 md:left-auto md:w-72 md:rounded-xl
-        "
+        className="fixed z-50 bg-panel border border-border shadow-2xl
+                   left-0 right-0 rounded-t-2xl
+                   md:left-auto md:right-4 md:w-72 md:rounded-xl md:bottom-6"
+        style={{
+          // Mobile bottom: above toolbar bars. Desktop bottom overridden by md:bottom-6 class.
+          bottom: mobileBottomOffset,
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-          {/* Mobile drag handle */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-border opacity-60 md:hidden" />
+        {/* Drag handle (mobile only) */}
+        <div className="flex justify-center pt-2.5 pb-0 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-border opacity-60" />
+        </div>
 
+        {/* Header */}
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2 md:pt-4">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] uppercase tracking-wider text-text-muted font-medium">
               Player Note
             </p>
             <p className="text-sm font-semibold text-text-primary truncate mt-0.5">
               {player.number} · {player.name || 'Player'}
-              {player.position ? <span className="ml-1 text-text-muted font-normal text-xs">({player.position})</span> : null}
+              {player.position
+                ? <span className="ml-1 text-text-muted font-normal text-xs">({player.position})</span>
+                : null}
             </p>
           </div>
           <button
@@ -108,7 +117,7 @@ export default function PlayerNoteSheet() {
             ref={textareaRef}
             value={draft}
             onChange={handleChange}
-            rows={4}
+            rows={3}
             placeholder="e.g. Press high, track their #8, stay wide…"
             className="w-full resize-none rounded-md bg-surface border border-border
                        text-sm text-text-primary placeholder:text-text-muted

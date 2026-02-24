@@ -117,7 +117,7 @@ export default function FrameTimeline() {
 
   const togglePlay = () => {
     if (frames.length === 0) return
-    setIsPlaying((prev) => !prev)
+    setIsPlaying(!isPlaying)
   }
 
   if (!hasFrames) {
@@ -128,7 +128,13 @@ export default function FrameTimeline() {
   return (
     <div
       className="shrink-0 bg-panel border-t border-border flex items-center gap-1 px-3 overflow-x-auto"
-      style={{ minHeight: '40px' }}
+      style={{
+        minHeight: '40px',
+        // Smooth momentum scrolling on iOS; hide scrollbar visually
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',        // Firefox
+        msOverflowStyle: 'none',       // IE/Edge legacy
+      }}
     >
       {/* Play / Stop button */}
       <button

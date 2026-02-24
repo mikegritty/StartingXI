@@ -234,8 +234,9 @@ export default function PlayerToken({
         </>
       )}
 
-      {/* Note indicator dot — shown when player has a note (top-left of token) */}
-      {!readOnly && player.note && (
+      {/* Note indicator dot — shown when player has a note (top-left of token).
+          Hidden on mobile when selected (the ✎ badge renders at the same position). */}
+      {!readOnly && player.note && !(isInteractive && selected && isMobile) && (
         <Circle
           x={-r * 0.65}
           y={-r * 0.65}

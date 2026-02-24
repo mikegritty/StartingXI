@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { pixelToNorm, clampNorm } from '../../utils/positions'
+import { clampNorm } from '../../utils/positions'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useBoardStore } from '../../store/boardStore'
 
@@ -11,26 +11,50 @@ import { useBoardStore } from '../../store/boardStore'
  * Returns handlers to attach to the Konva Stage (onPointerDown/Move/Up)
  * and a preview state object for the PreviewLayer to render.
  *
+ * Design notes:
+ *  - All mutable drawing-in-progress state lives in refs to avoid stale closures
+ *    in the pointer callbacks (which are registered once on the Konva stage).
+ *  - previewRef mirrors preview React state so handlePointerUp never reads stale state.
+ *  - activeTool/drawColor/drawings are mirrored to refs on every render so callbacks
+ *    always see the latest values without being recreated on every change.
+ *
  * @param {object} pitchRect - { x, y, width, height } from getPitchRect()
  * @param {object} stageRef  - ref to the Konva Stage instance
  * @returns {{ preview, textPending, handlers, clearTextPending }}
  */
 export function useDrawingPointer(pitchRect, stageRef) {
-  const activeTool   = useSettingsStore((s) => s.activeTool)
-  const drawColor    = useSettingsStore((s) => s.drawColor)
-  const addDrawing   = useBoardStore((s) => s.addDrawing)
+  const activeTool    = useSettingsStore((s) => s.activeTool)
+  const drawColor     = useSettingsStore((s) => s.drawColor)
+  const addDrawing    = useBoardStore((s) => s.addDrawing)
   const removeDrawing = useBoardStore((s) => s.removeDrawing)
-  const drawings     = useBoardStore((s) => s.board.drawings)
+  const drawings      = useBoardStore((s) => s.board.drawings)
 
-  // Live preview state (not stored until pointer up)
+  // React state for rendering the live preview
   const [preview, setPreview] = useState(null)
 
   // For text tool: pending { nx, ny } position where the overlay should appear
   const [textPending, setTextPending] = useState(null)
 
-  const isDrawing = useRef(false)
-  const startNorm = useRef(null)   // { nx, ny }
-  const freePoints = useRef([])    // flat array [x0,y0,x1,y1,...] normalized
+  // ── Mutable refs — no stale-closure risk ────────────────────────────────
+  const isDrawing     = useRef(false)
+  const startNorm     = useRef(null)         // { nx, ny }
+  const freePoints    = useRef([])           // flat array [x0,y0,x1,y1,...] normalized
+  const previewRef    = useRef(null)         // mirrors preview state so handlePointerUp is stable
+  const activeToolRef = useRef(activeTool)   // mirrors activeTool — updated every render
+  const drawColorRef  = useRef(drawColor)    // mirrors drawColor — updated every render
+  const drawingsRef   = useRef(drawings)     // mirrors drawings — updated every render
+
+  // Keep refs in sync with store values on every render
+  activeToolRef.current = activeTool
+  drawColorRef.current  = drawColor
+  drawingsRef.current   = drawings
+
+  // Helper: sync preview state + ref together
+  const updatePreview = (valOrFn) => {
+    const val = typeof valOrFn === 'function' ? valOrFn(previewRef.current) : valOrFn
+    previewRef.current = val
+    setPreview(val)
+  }
 
   // Helper: get normalized coords from stage pointer position
   const getNorm = useCallback((stage) => {
@@ -42,8 +66,14 @@ export function useDrawingPointer(pitchRect, stageRef) {
     }
   }, [pitchRect])
 
+  // ── Pointer handlers ──────────────────────────────────────────────────────
+  // These have minimal deps — they read live values from refs to avoid recreation.
+
   const handlePointerDown = useCallback((e) => {
-    if (activeTool === 'select') return
+    const tool  = activeToolRef.current
+    const color = drawColorRef.current
+
+    if (tool === 'select') return
     // Only respond to left mouse / primary touch
     if (e.evt.button !== undefined && e.evt.button !== 0) return
 
@@ -52,16 +82,13 @@ export function useDrawingPointer(pitchRect, stageRef) {
     const norm = getNorm(stage)
     if (!norm) return
 
-    if (activeTool === 'eraser') {
-      // Erase the topmost drawing whose bounding box contains the click point
-      // We'll do a simple proximity check on first/last points
-      const hit = findHitDrawing(drawings, norm, pitchRect)
+    if (tool === 'eraser') {
+      const hit = findHitDrawing(drawingsRef.current, norm)
       if (hit) removeDrawing(hit.id)
       return
     }
 
-    if (activeTool === 'text') {
-      // Show text overlay at this position — no preview needed
+    if (tool === 'text') {
       setTextPending({ nx: norm.nx, ny: norm.ny })
       return
     }
@@ -69,76 +96,71 @@ export function useDrawingPointer(pitchRect, stageRef) {
     isDrawing.current = true
     startNorm.current = norm
 
-    if (activeTool === 'zone' || activeTool === 'highlight') {
-      setPreview({ type: activeTool, x1: norm.nx, y1: norm.ny, x2: norm.nx, y2: norm.ny, color: drawColor })
-    } else if (activeTool === 'pass' || activeTool === 'run' || activeTool === 'dribble') {
-      setPreview({ type: activeTool, x1: norm.nx, y1: norm.ny, x2: norm.nx, y2: norm.ny, color: drawColor })
-    } else if (activeTool === 'free') {
+    if (tool === 'zone' || tool === 'highlight' ||
+        tool === 'pass' || tool === 'run' || tool === 'dribble') {
+      updatePreview({ type: tool, x1: norm.nx, y1: norm.ny, x2: norm.nx, y2: norm.ny, color })
+    } else if (tool === 'free') {
       freePoints.current = [norm.nx, norm.ny]
-      setPreview({ type: 'free', points: [norm.nx, norm.ny], color: drawColor })
+      updatePreview({ type: 'free', points: [norm.nx, norm.ny], color })
     }
-  }, [activeTool, drawColor, drawings, getNorm, pitchRect, removeDrawing, stageRef])
+  }, [getNorm, removeDrawing, stageRef])
 
   const handlePointerMove = useCallback((e) => {
     if (!isDrawing.current) return
-    if (activeTool === 'select' || activeTool === 'eraser' || activeTool === 'text') return
+    const tool = activeToolRef.current
+    if (tool === 'select' || tool === 'eraser' || tool === 'text') return
 
     const stage = stageRef.current
     if (!stage) return
     const norm = getNorm(stage)
     if (!norm) return
 
-    if (activeTool === 'free') {
+    if (tool === 'free') {
       freePoints.current = [...freePoints.current, norm.nx, norm.ny]
-      setPreview((prev) => ({ ...prev, points: [...freePoints.current] }))
+      updatePreview((prev) => prev ? { ...prev, points: [...freePoints.current] } : prev)
     } else {
-      setPreview((prev) => prev ? { ...prev, x2: norm.nx, y2: norm.ny } : prev)
+      updatePreview((prev) => prev ? { ...prev, x2: norm.nx, y2: norm.ny } : prev)
     }
-  }, [activeTool, getNorm, stageRef])
+  }, [getNorm, stageRef])
 
   const handlePointerUp = useCallback(() => {
     if (!isDrawing.current) return
     isDrawing.current = false
 
-    const start = startNorm.current
-    if (!start) { setPreview(null); return }
+    const tool    = activeToolRef.current
+    const color   = drawColorRef.current
+    const current = previewRef.current   // always fresh — no stale closure issue
+    const start   = startNorm.current
 
-    const current = preview
-    if (!current) { setPreview(null); return }
+    if (!start || !current) { updatePreview(null); return }
 
     // Minimum drag threshold to avoid accidental single-click drawings
-    const dx = (current.x2 ?? current.x1) - start.nx
-    const dy = (current.y2 ?? current.y1) - start.ny
-    const hasMoved = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01
+    const hasMoved =
+      Math.abs((current.x2 ?? current.x1) - start.nx) > 0.01 ||
+      Math.abs((current.y2 ?? current.y1) - start.ny) > 0.01
 
-    if (!hasMoved && activeTool !== 'free') {
-      setPreview(null)
+    if (!hasMoved && tool !== 'free') {
+      updatePreview(null)
       return
     }
 
     // Commit drawing to store
-    const base = { id: uuidv4(), color: drawColor }
+    const base = { id: uuidv4(), color }
 
-    if (activeTool === 'pass') {
-      addDrawing({ ...base, type: 'pass', x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
-    } else if (activeTool === 'run') {
-      addDrawing({ ...base, type: 'run', x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
-    } else if (activeTool === 'dribble') {
-      addDrawing({ ...base, type: 'dribble', x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
-    } else if (activeTool === 'zone') {
-      addDrawing({ ...base, type: 'zone', x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
-    } else if (activeTool === 'highlight') {
-      addDrawing({ ...base, type: 'highlight', x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
-    } else if (activeTool === 'free') {
+    if (tool === 'pass' || tool === 'run' || tool === 'dribble') {
+      addDrawing({ ...base, type: tool, x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
+    } else if (tool === 'zone' || tool === 'highlight') {
+      addDrawing({ ...base, type: tool, x1: start.nx, y1: start.ny, x2: current.x2, y2: current.y2 })
+    } else if (tool === 'free') {
       if (freePoints.current.length >= 4) {
         addDrawing({ ...base, type: 'free', points: [...freePoints.current] })
       }
       freePoints.current = []
     }
 
-    setPreview(null)
+    updatePreview(null)
     startNorm.current = null
-  }, [activeTool, drawColor, preview, addDrawing])
+  }, [addDrawing])
 
   const clearTextPending = useCallback(() => setTextPending(null), [])
 
@@ -155,16 +177,13 @@ export function useDrawingPointer(pitchRect, stageRef) {
 }
 
 // ── Eraser hit detection ──────────────────────────────────────────────────────
-// Returns the most-recently-added drawing that contains the click point.
-// Uses normalized coordinates throughout.
 
-function findHitDrawing(drawings, norm, pitchRect) {
-  const HIT_R = 0.05  // normalized hit radius
+function findHitDrawing(drawings, norm) {
+  const HIT_R = 0.05  // normalized hit radius — generous for touch targets
 
-  // Iterate in reverse to hit topmost drawings first
+  // Iterate in reverse to erase the topmost (most-recently-drawn) first
   for (let i = drawings.length - 1; i >= 0; i--) {
-    const d = drawings[i]
-    if (hitTest(d, norm, HIT_R)) return d
+    if (hitTest(drawings[i], norm, HIT_R)) return drawings[i]
   }
   return null
 }
@@ -174,11 +193,10 @@ function hitTest(d, { nx, ny }, r) {
     return pointNearSegment(nx, ny, d.x1, d.y1, d.x2, d.y2, r)
   }
   if (d.type === 'zone' || d.type === 'highlight') {
-    const minX = Math.min(d.x1, d.x2) - r
-    const maxX = Math.max(d.x1, d.x2) + r
-    const minY = Math.min(d.y1, d.y2) - r
-    const maxY = Math.max(d.y1, d.y2) + r
-    return nx >= minX && nx <= maxX && ny >= minY && ny <= maxY
+    return nx >= Math.min(d.x1, d.x2) - r &&
+           nx <= Math.max(d.x1, d.x2) + r &&
+           ny >= Math.min(d.y1, d.y2) - r &&
+           ny <= Math.max(d.y1, d.y2) + r
   }
   if (d.type === 'free') {
     const pts = d.points
@@ -193,12 +211,9 @@ function hitTest(d, { nx, ny }, r) {
 }
 
 function pointNearSegment(px, py, ax, ay, bx, by, r) {
-  const dx = bx - ax
-  const dy = by - ay
+  const dx = bx - ax, dy = by - ay
   const lenSq = dx * dx + dy * dy
   if (lenSq === 0) return Math.hypot(px - ax, py - ay) < r
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
-  const cx = ax + t * dx
-  const cy = ay + t * dy
-  return Math.hypot(px - cx, py - cy) < r
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < r
 }
