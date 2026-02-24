@@ -336,22 +336,23 @@ export default function FrameTimeline() {
                 )}
               </div>
 
-              {/* Duration badge — shown in animate mode or always visible as small text */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDurationEditId(showDurationSlider ? null : frame.id)
-                }}
-                title="Set frame duration"
-                className={`text-[8px] font-mono leading-none px-1 py-0.5 rounded transition-colors
-                            ${animateMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-70'}
-                            ${showDurationSlider
-                              ? 'bg-accent-blue/20 text-accent-blue'
-                              : 'hover:bg-surface text-text-muted hover:text-text-primary'
-                            }`}
-              >
-                {dur.toFixed(1)}s
-              </button>
+              {/* Duration badge — only rendered in animate mode (avoids blocking clicks in draw mode) */}
+              {animateMode && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDurationEditId(showDurationSlider ? null : frame.id)
+                  }}
+                  title="Set frame duration"
+                  className={`text-[8px] font-mono leading-none px-1 py-0.5 rounded transition-colors
+                              ${showDurationSlider
+                                ? 'bg-accent-blue/20 text-accent-blue'
+                                : 'hover:bg-surface text-text-muted hover:text-text-primary'
+                              }`}
+                >
+                  {dur.toFixed(1)}s
+                </button>
+              )}
 
               {/* Inline duration slider — shown when badge is clicked */}
               {showDurationSlider && (
