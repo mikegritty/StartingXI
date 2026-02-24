@@ -320,11 +320,10 @@ function MyPlays() {
   const board     = useBoardStore((s) => s.board)
   const loadBoard = useBoardStore((s) => s.loadBoard)
 
-  const [plays, setPlays]               = useState(() => loadPlays())
-  const [saving, setSaving]             = useState(false)
-  const [saveName, setSaveName]         = useState('')
-  const [previewEntry, setPreviewEntry] = useState(null)
-  const saveInputRef                    = useRef(null)
+  const [plays, setPlays]       = useState(() => loadPlays())
+  const [saving, setSaving]     = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const saveInputRef            = useRef(null)
 
   useEffect(() => {
     if (saving && saveInputRef.current) saveInputRef.current.focus()
@@ -342,18 +341,16 @@ function MyPlays() {
 
   const handleLoad = (entry) => {
     loadBoard(entry.board)
-    setPreviewEntry(null)
   }
 
   const handleDelete = (id) => {
-    if (previewEntry?.id === id) setPreviewEntry(null)
     const updated = plays.filter((p) => p.id !== id)
     savePlaysToStorage(updated)
     setPlays(updated)
   }
 
   const formatDate = (ts) =>
-    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
   return (
     <div>
@@ -396,54 +393,35 @@ function MyPlays() {
       )}
 
       {plays.length === 0 ? (
-        <p className="text-[11px] text-text-muted italic">No saved games yet.</p>
+        <p className="text-[11px] text-text-muted/60 italic leading-snug">
+          No saved games yet. Hit <span className="not-italic font-medium text-text-muted">+ Save</span> to save the current board.
+        </p>
       ) : (
         <div className="space-y-0.5">
           {plays.map((entry) => (
-            <div key={entry.id}>
-              <div
-                onClick={() => setPreviewEntry(previewEntry?.id === entry.id ? null : entry)}
-                className={`flex items-center gap-1.5 px-1.5 py-1.5 rounded-md group cursor-pointer transition-colors
-                  ${previewEntry?.id === entry.id ? 'bg-accent-blue/10' : 'hover:bg-white/[0.04]'}`}
-              >
-                <span className="flex-1 min-w-0 text-[11px] text-text-primary truncate">{entry.name}</span>
-                <span className="text-[9px] text-text-muted shrink-0 tabular-nums">{formatDate(entry.savedAt)}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(entry.id) }}
-                  className="text-[9px] text-text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                  title="Delete"
-                >✕</button>
+            <div
+              key={entry.id}
+              onClick={() => handleLoad(entry)}
+              className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-md group cursor-pointer
+                         hover:bg-accent-blue/10 transition-colors"
+              title="Click to load"
+            >
+              {/* Team color dots */}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <div className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: entry.board?.teams?.home?.primaryColor ?? '#1a56db' }} />
+                <div className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: entry.board?.teams?.away?.primaryColor ?? '#dc2626' }} />
               </div>
-
-              {previewEntry?.id === entry.id && (
-                <div className="mx-1.5 mb-1.5 p-2.5 rounded-md bg-surface border border-border text-[11px]">
-                  <div className="font-semibold text-text-primary mb-1 truncate">{entry.name}</div>
-                  <div className="text-text-muted space-y-0.5 mb-2.5">
-                    <div>Saved {formatDate(entry.savedAt)}</div>
-                    {entry.board?.teams && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="inline-block w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: entry.board.teams.home?.primaryColor ?? '#1a56db' }} />
-                        <span className="truncate">{entry.board.teams.home?.name || 'Home'}</span>
-                        <span className="text-text-muted/50 mx-0.5">vs</span>
-                        <span className="inline-block w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: entry.board.teams.away?.primaryColor ?? '#dc2626' }} />
-                        <span className="truncate">{entry.board.teams.away?.name || 'Away'}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => handleLoad(entry)}
-                      className="flex-1 text-[10px] py-1 rounded bg-accent-blue text-white hover:bg-blue-700 transition-colors font-medium">
-                      Load game
-                    </button>
-                    <button onClick={() => setPreviewEntry(null)}
-                      className="text-[10px] px-2 py-1 rounded border border-border text-text-muted hover:text-text-primary transition-colors">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+              <span className="flex-1 min-w-0 text-[11px] text-text-primary truncate group-hover:text-accent-blue transition-colors">
+                {entry.name}
+              </span>
+              <span className="text-[9px] text-text-muted shrink-0 tabular-nums">{formatDate(entry.savedAt)}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(entry.id) }}
+                className="text-[9px] text-text-muted hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0 ml-0.5"
+                title="Delete"
+              >✕</button>
             </div>
           ))}
         </div>
@@ -455,20 +433,46 @@ function MyPlays() {
 // ── Section components ────────────────────────────────────────────────────────
 
 function GamesSection() {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
   return (
     <div className="flex flex-col gap-0">
-      <TeamSection team="home" defaultOpen={true} showNamesToggle={true} />
-      <div className="flex items-center gap-2 my-8">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/40 px-2">vs</span>
-        <div className="flex-1 h-px bg-border" />
-      </div>
-      <TeamSection team="away" defaultOpen={false} />
-      <div className="mt-8 pt-4 border-t border-border">
-        <MyPlays />
-      </div>
-      <div className="mt-4 pt-4 border-t border-border">
+      {/* ── Saved games (primary content) ── */}
+      <MyPlays />
+
+      {/* ── Game day details ── */}
+      <div className="mt-5 pt-4 border-t border-border">
         <GameDaySection />
+      </div>
+
+      {/* ── Team settings (collapsible) ── */}
+      <div className="mt-5 pt-4 border-t border-border">
+        <button
+          onClick={() => setSettingsOpen((o) => !o)}
+          className="w-full flex items-center justify-between group mb-2"
+        >
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider
+                           group-hover:text-text-primary transition-colors">
+            Team Settings
+          </span>
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none"
+            className={`text-text-muted transition-transform group-hover:text-text-primary
+              ${settingsOpen ? '' : '-rotate-90'}`}>
+            <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        {settingsOpen && (
+          <div className="flex flex-col gap-0">
+            <TeamSection team="home" defaultOpen={true} showNamesToggle={true} />
+            <div className="flex items-center gap-2 my-6">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/40 px-2">vs</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <TeamSection team="away" defaultOpen={false} />
+          </div>
+        )}
       </div>
     </div>
   )
