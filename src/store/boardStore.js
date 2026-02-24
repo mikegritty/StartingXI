@@ -366,17 +366,26 @@ export const useBoardStore = create((set, get) => ({
       },
     })),
 
-  // Switch to a frame by index — copies that frame's players + drawings into live canvas.
+  // Switch to a frame by index — saves live canvas into the current frame first,
+  // then loads the target frame's players + drawings into the live canvas.
+  // This ensures manual edits are never lost when switching frames.
   setCurrentFrameIndex: (index) =>
     set((s) => {
-      const frame = s.board.play.frames[index]
-      if (!frame) return s
+      const { frames, currentFrameIndex } = s.board.play
+      const targetFrame = frames[index]
+      if (!targetFrame) return s
+      // Sync live canvas into whichever frame is currently active
+      const syncedFrames = frames.map((f, i) =>
+        i === currentFrameIndex
+          ? { ...f, players: structuredClone(s.board.players), drawings: structuredClone(s.board.drawings) }
+          : f
+      )
       return {
         board: {
           ...s.board,
-          players:  structuredClone(frame.players),
-          drawings: structuredClone(frame.drawings),
-          play: { ...s.board.play, currentFrameIndex: index },
+          players:  structuredClone(syncedFrames[index].players),
+          drawings: structuredClone(syncedFrames[index].drawings),
+          play: { ...s.board.play, frames: syncedFrames, currentFrameIndex: index },
         },
       }
     }),
