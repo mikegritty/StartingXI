@@ -27,6 +27,18 @@ function PhasePills() {
   const activePhase    = useSettingsStore((s) => s.activePhase)
   const setActivePhase = useSettingsStore((s) => s.setActivePhase)
 
+  const handlePhaseClick = (id) => {
+    const prev = activePhase                        // phase we're leaving (may be null)
+    const next = activePhase === id ? null : id     // null = toggling current phase off
+
+    // 1. Save current player positions into the previous phase slot,
+    //    then restore any saved positions for the next phase.
+    useBoardStore.getState().applyPhasePositions(next, prev)
+
+    // 2. Update the active phase toggle in settingsStore.
+    setActivePhase(id)
+  }
+
   return (
     <div>
       <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
@@ -38,7 +50,7 @@ function PhasePills() {
           return (
             <button
               key={id}
-              onClick={() => setActivePhase(id)}
+              onClick={() => handlePhaseClick(id)}
               className="text-[10px] px-2 py-1 rounded-full border font-medium transition-all"
               style={{
                 backgroundColor: active ? color : 'transparent',

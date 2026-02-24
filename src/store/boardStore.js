@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
+import { useSettingsStore } from './settingsStore'
 
 const DEFAULT_BOARD = {
   id: uuidv4(),
@@ -93,16 +94,48 @@ export const useBoardStore = create((set, get) => ({
       board: { ...s.board, players: s.board.players.filter((p) => p.id !== id) },
     })),
 
-  // movePlayer always writes x,y (no phase variant)
+  // movePlayer writes x,y. When a phase is active it also persists to phasePositions.
   movePlayer: (id, x, y) =>
-    set((s) => ({
-      board: {
-        ...s.board,
-        players: s.board.players.map((p) =>
-          p.id !== id ? p : { ...p, x, y }
-        ),
-      },
-    })),
+    set((s) => {
+      const activePhase = useSettingsStore.getState().activePhase
+      return {
+        board: {
+          ...s.board,
+          players: s.board.players.map((p) =>
+            p.id !== id ? p : {
+              ...p,
+              x,
+              y,
+              phasePositions: activePhase
+                ? { ...p.phasePositions, [activePhase]: { x, y } }
+                : p.phasePositions,
+            }
+          ),
+        },
+      }
+    }),
+
+  // Switch between tactical phases, saving current positions into prevPhase and
+  // restoring any saved positions for nextPhase. Called from PhasePills in LeftPanel.
+  // nextPhase = null means toggling the active phase off (no restore, just save).
+  applyPhasePositions: (nextPhase, prevPhase) =>
+    set((s) => {
+      const players = s.board.players.map((p) => {
+        // Always save the current live position into the previous phase slot.
+        const phasePositions = prevPhase
+          ? { ...(p.phasePositions ?? {}), [prevPhase]: { x: p.x, y: p.y } }
+          : (p.phasePositions ?? {})
+        // Restore nextPhase saved position if it exists; otherwise keep current x,y.
+        const saved = nextPhase ? phasePositions[nextPhase] : null
+        return {
+          ...p,
+          x: saved != null ? saved.x : p.x,
+          y: saved != null ? saved.y : p.y,
+          phasePositions,
+        }
+      })
+      return { board: { ...s.board, players } }
+    }),
 
   updatePlayer: (id, patch) =>
     set((s) => ({
@@ -146,7 +179,8 @@ export const useBoardStore = create((set, get) => ({
 
       const merged = players.map((newP, i) => {
         const old  = teamStarters[i]
-        const base = { ...newP, isStarter: true, position: newP.position ?? newP.role, note: '' }
+        // Clear phasePositions so stale phase snapshots don't carry over to the new shape.
+        const base = { ...newP, isStarter: true, position: newP.position ?? newP.role, note: '', phasePositions: {} }
         if (!old) return base
         return { ...base, note: old.note ?? '' }
       })
