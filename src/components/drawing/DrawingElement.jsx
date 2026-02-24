@@ -482,7 +482,7 @@ function CurveFlipBadge({ x, y, onClick }) {
     onClick?.()
   }
   return (
-    <Group x={x} y={y} onClick={handleClick} onTap={handleClick}>
+    <Group x={x} y={y}>
       <Circle
         radius={DEL_R}
         fill="#374151"
@@ -490,6 +490,9 @@ function CurveFlipBadge({ x, y, onClick }) {
         strokeWidth={1}
         shadowColor="rgba(0,0,0,0.6)"
         shadowBlur={3}
+        hitStrokeWidth={8}
+        onClick={handleClick}
+        onTap={handleClick}
       />
       <Text
         text="↔"
