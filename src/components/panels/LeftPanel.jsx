@@ -566,10 +566,14 @@ function PlayerRow({ p }) {
 function SquadSection() {
   const allPlayers = useBoardStore(useShallow((s) => s.board.players))
   const teamData   = useBoardStore(useShallow((s) => s.board.teams.home))
+  const setTeam    = useBoardStore((s) => s.setTeam)
   const players    = allPlayers.filter((p) => p.team === 'home')
 
   const starters = players.filter((p) => p.isStarter !== false)
   const subs     = players.filter((p) => p.isStarter === false)
+
+  const [teamNameVal, setTeamNameVal] = useState(teamData.name ?? '')
+  useEffect(() => { setTeamNameVal(teamData.name ?? '') }, [teamData.name])
 
   return (
     <div>
@@ -578,11 +582,19 @@ function SquadSection() {
         {POSITIONS.map((pos) => <option key={pos} value={pos} />)}
       </datalist>
 
-      {/* Header */}
+      {/* Header — team name is inline editable */}
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10 shrink-0"
              style={{ backgroundColor: teamData.primaryColor }} />
-        <span className="text-xs font-semibold text-text-primary truncate">{teamData.name || 'Home Team'}</span>
+        <input
+          value={teamNameVal}
+          onChange={(e) => setTeamNameVal(e.target.value)}
+          onBlur={() => setTeam('home', { name: teamNameVal.trim() })}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+          className={`${inlineCls} flex-1 min-w-0 text-xs font-semibold px-1`}
+          placeholder="Team name…"
+          title="Home team name"
+        />
       </div>
       <p className="text-[10px] text-text-muted mb-3">
         {starters.length} starter{starters.length !== 1 ? 's' : ''}

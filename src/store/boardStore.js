@@ -26,9 +26,14 @@ const DEFAULT_4231 = [
   ...p,
 }))
 
+function todayName() {
+  const d = new Date()
+  return `New Game ${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
+}
+
 const DEFAULT_BOARD = {
   id: uuidv4(),
-  name: 'New Board',
+  name: todayName(),
   type: 'tactic',        // 'tactic' | 'gameday'
   gameDayMeta: null,     // { teamName, opponentName, matchDate } or null
   pitch: {
