@@ -6,7 +6,8 @@ import { PHASES } from '../../data/phases'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import GameDayModal from '../ui/GameDayModal'
-import SquadEditor from '../squad/SquadEditor'
+import { roleFromNumber } from '../../data/formations'
+// SquadEditor modal removed — editing is now inline in SquadSection
 
 const PLAYS_KEY = 'startingxi_plays'
 const MAX_PLAYS = 20
@@ -473,7 +474,96 @@ function GamesSection() {
   )
 }
 
-function SquadSection({ onOpenEditor }) {
+const ROLE_COLORS = { GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#ef4444' }
+const POSITIONS   = ['GK','RB','CB','LB','RWB','LWB','CDM','CM','CAM','RM','LM','RW','LW','ST','CF','SS']
+
+// Shared style: invisible until focused, then shows as a subtle input
+const inlineCls = `bg-transparent border-none outline-none text-[11px] text-text-primary
+  focus:bg-surface focus:rounded focus:ring-1 focus:ring-accent-blue/40
+  placeholder:text-text-muted/40 transition-colors`
+
+function PlayerRow({ p }) {
+  const updatePlayer = useBoardStore((s) => s.updatePlayer)
+
+  const [numVal,  setNumVal]  = useState(String(p.number ?? ''))
+  const [posVal,  setPosVal]  = useState(p.position ?? '')
+  const [nameVal, setNameVal] = useState(p.name ?? '')
+
+  // Keep local state in sync if store changes externally (e.g. formation preset applied)
+  useEffect(() => { setNumVal(String(p.number ?? '')) }, [p.number])
+  useEffect(() => { setPosVal(p.position ?? '') },       [p.position])
+  useEffect(() => { setNameVal(p.name ?? '') },          [p.name])
+
+  const saveNumber = () => {
+    const n = parseInt(numVal, 10)
+    if (!isNaN(n) && n >= 1 && n <= 99) {
+      updatePlayer(p.id, { number: n, role: roleFromNumber(n) })
+    } else {
+      setNumVal(String(p.number ?? '')) // revert on invalid
+    }
+  }
+
+  const savePosition = () => {
+    const v = posVal.trim().toUpperCase()
+    updatePlayer(p.id, { position: v })
+  }
+
+  const saveName = () => {
+    updatePlayer(p.id, { name: nameVal.trim() })
+  }
+
+  const roleColor = ROLE_COLORS[p.role] ?? '#10b981'
+
+  return (
+    <div className="flex items-center gap-1.5 px-1 py-0.5 rounded-md hover:bg-white/[0.04] transition-colors group">
+      {/* Number */}
+      <input
+        type="number" min="1" max="99"
+        value={numVal}
+        onChange={(e) => setNumVal(e.target.value)}
+        onBlur={saveNumber}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+        className={`${inlineCls} w-7 text-center tabular-nums shrink-0 text-text-muted`}
+        placeholder="—"
+        title="Jersey number"
+      />
+
+      {/* Position badge — styled input that looks like a badge */}
+      <div className="relative shrink-0">
+        <input
+          list="squad-positions-left"
+          value={posVal}
+          onChange={(e) => setPosVal(e.target.value)}
+          onBlur={savePosition}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+          className={`${inlineCls} w-11 text-center text-[9px] font-semibold rounded px-1 py-0.5`}
+          style={{ color: roleColor, backgroundColor: roleColor + '18' }}
+          placeholder="POS"
+          title="Position"
+        />
+      </div>
+
+      {/* Name */}
+      <input
+        type="text"
+        value={nameVal}
+        onChange={(e) => setNameVal(e.target.value)}
+        onBlur={saveName}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+        className={`${inlineCls} flex-1 min-w-0 px-1`}
+        placeholder="Name…"
+        title="Player name"
+      />
+
+      {/* Sub badge */}
+      {p.isStarter === false && (
+        <span className="text-[8px] text-text-muted/50 shrink-0 border border-border/50 rounded px-1">sub</span>
+      )}
+    </div>
+  )
+}
+
+function SquadSection() {
   const allPlayers = useBoardStore(useShallow((s) => s.board.players))
   const teamData   = useBoardStore(useShallow((s) => s.board.teams.home))
   const players    = allPlayers.filter((p) => p.team === 'home')
@@ -481,52 +571,41 @@ function SquadSection({ onOpenEditor }) {
   const starters = players.filter((p) => p.isStarter !== false)
   const subs     = players.filter((p) => p.isStarter === false)
 
-  const ROLE_COLORS = { GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#ef4444' }
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10"
-               style={{ backgroundColor: teamData.primaryColor }} />
-          <span className="text-xs font-semibold text-text-primary">{teamData.name || 'Home Team'}</span>
-        </div>
+      {/* Datalist for position autocomplete */}
+      <datalist id="squad-positions-left">
+        {POSITIONS.map((pos) => <option key={pos} value={pos} />)}
+      </datalist>
+
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10 shrink-0"
+             style={{ backgroundColor: teamData.primaryColor }} />
+        <span className="text-xs font-semibold text-text-primary truncate">{teamData.name || 'Home Team'}</span>
       </div>
       <p className="text-[10px] text-text-muted mb-3">
         {starters.length} starter{starters.length !== 1 ? 's' : ''}
         {subs.length > 0 && ` · ${subs.length} sub${subs.length !== 1 ? 's' : ''}`}
+        <span className="ml-1 opacity-50">· click to edit</span>
       </p>
-      <div className="space-y-0.5 mb-4">
-        {[...starters, ...subs].map((p) => {
-          const roleColor = ROLE_COLORS[p.role] ?? '#10b981'
-          return (
-            <div key={p.id}
-              className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-white/[0.04] transition-colors">
-              <span className="text-[10px] text-text-muted tabular-nums w-5 text-right shrink-0">
-                {p.number ?? '—'}
-              </span>
-              <span className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0"
-                style={{ color: roleColor, backgroundColor: roleColor + '20' }}>
-                {p.position || p.role || '—'}
-              </span>
-              <span className="flex-1 min-w-0 text-[11px] text-text-primary truncate">
-                {p.name || <span className="text-text-muted italic">Unnamed</span>}
-              </span>
-              {p.isStarter === false && (
-                <span className="text-[8px] text-text-muted/60 shrink-0 border border-border rounded px-1">sub</span>
-              )}
-            </div>
-          )
-        })}
+
+      {/* Column headers */}
+      <div className="flex items-center gap-1.5 px-1 mb-1">
+        <span className="w-7 text-center text-[9px] text-text-muted/50 shrink-0">#</span>
+        <span className="w-11 text-center text-[9px] text-text-muted/50 shrink-0">Pos</span>
+        <span className="flex-1 text-[9px] text-text-muted/50 px-1">Name</span>
+      </div>
+
+      {/* Player rows */}
+      <div className="space-y-0">
+        {[...starters, ...subs].map((p) => (
+          <PlayerRow key={p.id} p={p} />
+        ))}
         {players.length === 0 && (
-          <p className="text-[11px] text-text-muted italic px-1.5">No players yet.</p>
+          <p className="text-[11px] text-text-muted italic px-1.5 py-2">No players yet.</p>
         )}
       </div>
-      <button onClick={onOpenEditor}
-        className="w-full text-[11px] py-1.5 rounded-md border border-border
-                   text-text-muted hover:text-text-primary hover:border-text-muted transition-colors font-medium">
-        Edit squad →
-      </button>
     </div>
   )
 }
@@ -585,8 +664,6 @@ export default function LeftPanel({ collapsed = false, onExpand }) {
   const activeNavSection    = useSettingsStore((s) => s.activeNavSection)
   const setActiveNavSection = useSettingsStore((s) => s.setActiveNavSection)
   const homeColor           = useBoardStore((s) => s.board.teams.home.primaryColor)
-
-  const [squadEditorOpen, setSquadEditorOpen] = useState(false)
 
   const navBtnCls = (id) =>
     `w-full flex flex-col items-center justify-center gap-0.5 py-2 rounded-md transition-colors
@@ -664,17 +741,13 @@ export default function LeftPanel({ collapsed = false, onExpand }) {
         <div className="w-52 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 py-5">
             {activeNavSection === 'games'    && <GamesSection />}
-            {activeNavSection === 'squad'    && <SquadSection onOpenEditor={() => setSquadEditorOpen(true)} />}
+            {activeNavSection === 'squad'    && <SquadSection />}
             {activeNavSection === 'training' && <TrainingSection />}
             {activeNavSection === 'schedule' && <ScheduleSection />}
           </div>
         </div>
       )}
 
-      {/* Squad editor modal */}
-      {squadEditorOpen && (
-        <SquadEditor team="home" onClose={() => setSquadEditorOpen(false)} />
-      )}
     </aside>
   )
 }
