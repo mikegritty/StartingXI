@@ -84,8 +84,12 @@ function ArrowDrawing({ drawing, pitchRect, dashed, curved, color, opacity, sele
   const shapeListening = !readOnly
 
   if (curved) {
-    const pts = bezierPoints(p1.px, p1.py, p2.px, p2.py, 20)
+    const curvature = drawing.curvature ?? 0.25
+    const pts = bezierPoints(p1.px, p1.py, p2.px, p2.py, 20, curvature)
     const last4 = pts.slice(-4)
+    // Flip badge sits on the opposite side of the curve midpoint
+    const flipX = mx
+    const flipY = my + 20  // below the delete badge
     return (
       <Group>
         {/* Invisible wide hit area for easier tapping */}
@@ -122,12 +126,16 @@ function ArrowDrawing({ drawing, pitchRect, dashed, curved, color, opacity, sele
         />
         {/* Ball indicator at start */}
         <BallDot x={p1.px} y={p1.py} />
-        {/* Selection handles */}
+        {/* Selection handles + flip curve button */}
         {selected && !readOnly && (
           <>
             <EndpointHandle x={p1.px} y={p1.py} onDragMove={(e) => handleDragMove('tail', e)} />
             <EndpointHandle x={p2.px} y={p2.py} onDragMove={(e) => handleDragMove('head', e)} />
             <DeleteBadge x={mx} y={my} onDelete={onDelete} />
+            <CurveFlipBadge
+              x={flipX} y={flipY}
+              onClick={() => onUpdate?.({ curvature: -(curvature) })}
+            />
           </>
         )}
       </Group>
@@ -464,6 +472,37 @@ function FontSizeBadge({ x, y, label, onClick }) {
   )
 }
 
+/**
+ * Curve flip badge — grey circle with ↔ arrow, shown on selected run drawings.
+ * Clicking it negates the curvature to flip the curve left ↔ right.
+ */
+function CurveFlipBadge({ x, y, onClick }) {
+  const handleClick = (e) => {
+    e.cancelBubble = true
+    onClick?.()
+  }
+  return (
+    <Group x={x} y={y} onClick={handleClick} onTap={handleClick}>
+      <Circle
+        radius={DEL_R}
+        fill="#374151"
+        stroke="rgba(255,255,255,0.2)"
+        strokeWidth={1}
+        shadowColor="rgba(0,0,0,0.6)"
+        shadowBlur={3}
+      />
+      <Text
+        text="↔"
+        fontSize={10}
+        fill="white"
+        offsetX={5}
+        offsetY={5}
+        listening={false}
+      />
+    </Group>
+  )
+}
+
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 /**
@@ -546,14 +585,15 @@ function DeleteBadge({ x, y, onDelete }) {
 
 /**
  * Generate points along a quadratic bezier curve from (x1,y1) to (x2,y2).
+ * curvature: positive = curves left of travel direction, negative = right. Default 0.25.
  */
-function bezierPoints(x1, y1, x2, y2, steps = 20) {
+function bezierPoints(x1, y1, x2, y2, steps = 20, curvature = 0.25) {
   const mx = (x1 + x2) / 2
   const my = (y1 + y2) / 2
   const dx = x2 - x1
   const dy = y2 - y1
   const len = Math.hypot(dx, dy) || 1
-  const offset = len * 0.25
+  const offset = len * curvature
   const cx = mx - (dy / len) * offset
   const cy = my + (dx / len) * offset
 

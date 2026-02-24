@@ -3,30 +3,30 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useBoardStore } from '../../store/boardStore'
 
 const TOOLS = [
-  { id: 'select',    label: 'Select (V)',
-    tooltip: 'Select & move players. Tap a drawing to edit or delete it.',
+  { id: 'select',    label: 'Select',   shortLabel: 'Select',
+    tooltip: 'Select & move players. Tap a drawing to edit or delete it. [V]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
       <path d="M2 1l10 5.5-4.5 1.5-2 4.5L2 1z"/>
     </svg>
   )},
-  { id: 'pass',      label: 'Pass (A)',
-    tooltip: 'Pass — draw a straight arrow showing ball movement. ⚽ marks the start.',
+  { id: 'pass',      label: 'Pass',     shortLabel: 'Pass',
+    tooltip: 'Pass — straight arrow showing ball movement. ⚽ marks the start. [A]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 12L12 2M12 2H7M12 2V7"/>
     </svg>
   )},
-  { id: 'run',       label: 'Run (C)',
-    tooltip: 'Run — curved arrow showing a player\'s run off the ball.',
+  { id: 'run',       label: 'Run',      shortLabel: 'Run',
+    tooltip: 'Run — curved arrow for a player\'s run off the ball. Select to flip curve. [C]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 12 Q 2 2 12 2" />
       <path d="M12 2H8M12 2V6" fill="none"/>
     </svg>
   )},
-  { id: 'dribble',   label: 'Dribble (D)',
-    tooltip: 'Dribble — dashed arrow showing a player carrying the ball.',
+  { id: 'dribble',   label: 'Dribble',  shortLabel: 'Dribble',
+    tooltip: 'Dribble — dashed arrow showing a player carrying the ball. [D]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2">
       <path d="M2 12L12 2" strokeDasharray="0"/>
@@ -34,29 +34,29 @@ const TOOLS = [
       <path d="M2 12L9 5"/>
     </svg>
   )},
-  { id: 'zone',      label: 'Zone (Z)',
-    tooltip: 'Zone — draw a highlighted rectangular area.',
+  { id: 'zone',      label: 'Zone',     shortLabel: 'Zone',
+    tooltip: 'Zone — draw a highlighted rectangular area on the pitch. [Z]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="3" width="10" height="8" rx="1"/>
     </svg>
   )},
-  { id: 'highlight', label: 'Highlight (H)',
-    tooltip: 'Highlight — draw a highlighted ellipse to mark a space or player.',
+  { id: 'highlight', label: 'Highlight', shortLabel: 'Circle',
+    tooltip: 'Highlight — draw an ellipse to mark a space or player. [H]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="7" cy="7" r="5"/>
     </svg>
   )},
-  { id: 'text',      label: 'Text (T)',
-    tooltip: 'Text — tap the pitch to add a text annotation.',
+  { id: 'text',      label: 'Text',     shortLabel: 'Text',
+    tooltip: 'Text — tap the pitch to add a text annotation. [T]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
       <path d="M2 3h10v1.5H8.5v7h-3v-7H2V3z"/>
     </svg>
   )},
-  { id: 'eraser',    label: 'Eraser (E)',
-    tooltip: 'Eraser — tap a drawing to remove it. Or use Select tool then tap ✕.',
+  { id: 'eraser',    label: 'Eraser',   shortLabel: 'Erase',
+    tooltip: 'Eraser — tap a drawing to remove it. Or use Select then tap ✕. [E]',
     icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M9 2L12 5L5 12H2V9L9 2Z"/>
@@ -172,7 +172,8 @@ export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
               onClick={() => setActiveTool(tool.id)}
               title={tool.tooltip ?? tool.label}
               className={`
-                flex items-center justify-center w-8 h-8 rounded-md transition-colors
+                flex flex-col items-center justify-center gap-0.5 px-1 py-1 rounded-md transition-colors
+                min-w-[36px]
                 ${activeTool === tool.id
                   ? 'bg-accent-blue text-white'
                   : 'text-text-muted hover:text-text-primary hover:bg-surface'
@@ -180,6 +181,9 @@ export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
               `}
             >
               {tool.icon}
+              <span className="text-[8px] leading-none font-medium select-none">
+                {tool.shortLabel}
+              </span>
             </button>
           </React.Fragment>
         ))}
