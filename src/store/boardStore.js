@@ -16,18 +16,30 @@ const DEFAULT_BOARD = {
     home: { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff' },
     away: { name: 'Away Team', primaryColor: '#dc2626', secondaryColor: '#ffffff' },
   },
-  // players have x/y for both phases:
-  //   x, y           = in-possession position
-  //   x_out, y_out   = out-of-possession position
-  //   position       = tactical label string e.g. "CDM", "CB", "ST"
-  //   isStarter      = boolean; true = on pitch canvas, false = substitute bench
-  //   note           = coach instructions for this player (plain text, max 500 chars)
+  // players: tactical label string e.g. "CDM", "CB", "ST"
+  //   isStarter = boolean; true = on pitch canvas, false = substitute bench
+  //   note      = coach instructions for this player (plain text, max 500 chars)
   players: [],
   // drawings: array of drawing objects (pass, run, dribble, zone, highlight, text)
   // All positional values normalized 0–1 relative to pitchRect width/height
   drawings: [],
-  // frames: array of animation frame snapshots
-  frames: [],
+  // play: animation play model — sequence of frames with phase per frame
+  play: {
+    name: '',
+    frames: [
+      {
+        id: uuidv4(),
+        index: 0,
+        label: 'Frame 1',
+        phase: null,
+        players: [],
+        drawings: [],
+      },
+    ],
+    currentFrameIndex: 0,
+    isPlaying: false,
+    animateBetweenFrames: false,
+  },
   equipment: [],
   labels: [],
 }
@@ -81,16 +93,14 @@ export const useBoardStore = create((set, get) => ({
       board: { ...s.board, players: s.board.players.filter((p) => p.id !== id) },
     })),
 
-  // movePlayer stores position into the correct phase fields
-  movePlayer: (id, x, y, phase = 'in') =>
+  // movePlayer always writes x,y (no phase variant)
+  movePlayer: (id, x, y) =>
     set((s) => ({
       board: {
         ...s.board,
-        players: s.board.players.map((p) => {
-          if (p.id !== id) return p
-          if (phase === 'out') return { ...p, x_out: x, y_out: y }
-          return { ...p, x, y }
-        }),
+        players: s.board.players.map((p) =>
+          p.id !== id ? p : { ...p, x, y }
+        ),
       },
     })),
 
@@ -127,8 +137,8 @@ export const useBoardStore = create((set, get) => ({
       },
     })),
 
-  // applyFormation sets positions for one phase ('in' or 'out').
-  applyFormation: (team, players, phase = 'in') =>
+  // applyFormation sets positions for all team starters. No phase concept.
+  applyFormation: (team, players) =>
     set((s) => {
       const otherTeam    = s.board.players.filter((p) => p.team !== team)
       const teamSubs     = s.board.players.filter((p) => p.team === team && p.isStarter === false)
@@ -138,10 +148,7 @@ export const useBoardStore = create((set, get) => ({
         const old  = teamStarters[i]
         const base = { ...newP, isStarter: true, position: newP.position ?? newP.role, note: '' }
         if (!old) return base
-        if (phase === 'out') {
-          return { ...old, x_out: newP.x, y_out: newP.y, role: newP.role, number: newP.number }
-        }
-        return { ...base, x_out: old.x_out ?? old.x, y_out: old.y_out ?? old.y, note: old.note ?? '' }
+        return { ...base, note: old.note ?? '' }
       })
 
       return {
@@ -163,10 +170,8 @@ export const useBoardStore = create((set, get) => ({
             return {
               ...p,
               isStarter: true,
-              x:     starter.x,
-              y:     starter.y,
-              x_out: starter.x_out ?? starter.x,
-              y_out: starter.y_out ?? starter.y,
+              x: starter.x,
+              y: starter.y,
             }
           }
           if (p.id === starterId) {
@@ -212,44 +217,116 @@ export const useBoardStore = create((set, get) => ({
       },
     })),
 
-  // ── Animation frame actions ──────────────────────────────────────────────
+  // ── Play / Animation frame actions ───────────────────────────────────────
 
-  // Add current board state as a new animation frame
-  addFrame: (label) =>
+  setPlayName: (name) =>
+    set((s) => ({
+      board: { ...s.board, play: { ...s.board.play, name } },
+    })),
+
+  setAnimateBetweenFrames: (v) =>
+    set((s) => ({
+      board: { ...s.board, play: { ...s.board.play, animateBetweenFrames: v } },
+    })),
+
+  // Replace the entire board (used by My Plays load).
+  // Merges with DEFAULT_BOARD so old saves missing new fields still work correctly.
+  loadBoard: (board) => set({
+    board: {
+      ...DEFAULT_BOARD,
+      ...board,
+      pitch: { ...DEFAULT_BOARD.pitch, ...(board.pitch ?? {}) },
+      teams: {
+        home: { ...DEFAULT_BOARD.teams.home, ...(board.teams?.home ?? {}) },
+        away: { ...DEFAULT_BOARD.teams.away, ...(board.teams?.away ?? {}) },
+      },
+      play: {
+        ...DEFAULT_BOARD.play,
+        ...(board.play ?? {}),
+      },
+    },
+  }),
+
+  // Snapshot the live canvas into a new frame and jump to it.
+  // Frame 0 always exists as base — additional frames are added here.
+  // IMPORTANT: Before adding a second frame, we sync the live canvas into frame 0
+  // so that switching back to frame 0 never wipes the user's setup.
+  addFrame: () =>
     set((s) => {
-      if (s.board.frames.length >= 8) return s // max 8 frames
-      const frame = {
+      const { frames, currentFrameIndex } = s.board.play
+      if (frames.length >= 8) return s
+
+      // Sync live canvas into the current frame before creating a new one.
+      // This ensures frame 0 (and any current frame) always holds the latest positions.
+      const syncedFrames = frames.map((f, i) =>
+        i === currentFrameIndex
+          ? { ...f, players: structuredClone(s.board.players), drawings: structuredClone(s.board.drawings) }
+          : f
+      )
+
+      const currentFrame = syncedFrames[currentFrameIndex]
+      const newFrame = {
         id: uuidv4(),
-        label: label || `Frame ${s.board.frames.length + 1}`,
-        players:  s.board.players.map((p) => ({ ...p })),
-        drawings: s.board.drawings.map((d) => ({ ...d })),
+        index: syncedFrames.length,
+        label: `Frame ${syncedFrames.length + 1}`,
+        phase: currentFrame?.phase ?? null,
+        players:  structuredClone(s.board.players),
+        drawings: structuredClone(s.board.drawings),
       }
-      return { board: { ...s.board, frames: [...s.board.frames, frame] } }
+      return {
+        board: {
+          ...s.board,
+          play: {
+            ...s.board.play,
+            frames: [...syncedFrames, newFrame],
+            currentFrameIndex: syncedFrames.length,
+          },
+        },
+      }
     }),
 
+  // Remove a frame by id. Frame at index 0 cannot be removed.
   removeFrame: (id) =>
-    set((s) => ({
-      board: { ...s.board, frames: s.board.frames.filter((f) => f.id !== id) },
-    })),
+    set((s) => {
+      const frames = s.board.play.frames
+      if (frames.length <= 1) return s
+      const idx = frames.findIndex((f) => f.id === id)
+      if (idx === 0) return s  // cannot remove frame 0
+      const newFrames = frames.filter((f) => f.id !== id).map((f, i) => ({ ...f, index: i }))
+      const newIdx    = Math.min(s.board.play.currentFrameIndex, newFrames.length - 1)
+      const target    = newFrames[newIdx]
+      return {
+        board: {
+          ...s.board,
+          players:  structuredClone(target.players),
+          drawings: structuredClone(target.drawings),
+          play: { ...s.board.play, frames: newFrames, currentFrameIndex: newIdx },
+        },
+      }
+    }),
 
   updateFrame: (id, patch) =>
     set((s) => ({
       board: {
         ...s.board,
-        frames: s.board.frames.map((f) => f.id === id ? { ...f, ...patch } : f),
+        play: {
+          ...s.board.play,
+          frames: s.board.play.frames.map((f) => f.id === id ? { ...f, ...patch } : f),
+        },
       },
     })),
 
-  // Restore board state from a saved frame snapshot
-  restoreFrame: (id) =>
+  // Switch to a frame by index — copies that frame's players + drawings into live canvas.
+  setCurrentFrameIndex: (index) =>
     set((s) => {
-      const frame = s.board.frames.find((f) => f.id === id)
+      const frame = s.board.play.frames[index]
       if (!frame) return s
       return {
         board: {
           ...s.board,
-          players:  frame.players.map((p) => ({ ...p })),
-          drawings: frame.drawings.map((d) => ({ ...d })),
+          players:  structuredClone(frame.players),
+          drawings: structuredClone(frame.drawings),
+          play: { ...s.board.play, currentFrameIndex: index },
         },
       }
     }),

@@ -6,7 +6,7 @@ import PublishModal    from '../ui/PublishModal'
 import ShareModal      from '../ui/ShareModal'
 import SharedLinksPanel from '../ui/SharedLinksPanel'
 
-export default function TopBar() {
+export default function TopBar({ onToggleLeftPanel }) {
   const name              = useBoardStore((s) => s.board.name)
   const boardType         = useBoardStore((s) => s.board.type)
   const setBoardName      = useBoardStore((s) => s.setBoardName)
@@ -37,6 +37,18 @@ export default function TopBar() {
 
   return (
     <header className="h-11 flex items-center px-4 border-b border-border bg-panel shrink-0 gap-4">
+      {/* Collapse left panel toggle (desktop only) */}
+      <button
+        onClick={onToggleLeftPanel}
+        title="Toggle panel"
+        className="hidden md:flex items-center justify-center w-7 h-7 shrink-0 rounded-md
+                   text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M2 3h10M2 7h10M2 11h10"/>
+        </svg>
+      </button>
+
       {/* Logo */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="w-6 h-6 rounded-md bg-accent-blue flex items-center justify-center">

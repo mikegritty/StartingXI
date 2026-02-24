@@ -30,7 +30,6 @@ function contrastColor(hex) {
 export default function PlayerToken({
   player,
   pitchRect,
-  phase,
   isDropTarget,
   pendingSubMode,
   tokenScale = 1,
@@ -38,9 +37,9 @@ export default function PlayerToken({
 }) {
   const { id, team, role, selected } = player
 
-  // Pull position from the correct phase
-  const nx = player[`x_${phase}`] ?? player.x
-  const ny = player[`y_${phase}`] ?? player.y
+  // Always use x,y — no phase variants
+  const nx     = player.x
+  const ny     = player.y
   const number = player.number
   const name   = player.name
 
@@ -79,7 +78,7 @@ export default function PlayerToken({
     if (!isInteractive) return
     const node = e.target
     const { nx: newNx, ny: newNy } = pixelToNorm(node.x(), node.y(), pitchRect)
-    movePlayer(id, clampNorm(newNx), clampNorm(newNy), phase)
+    movePlayer(id, clampNorm(newNx), clampNorm(newNy))
   }
 
   const handleClick = (e) => {
@@ -128,6 +127,7 @@ export default function PlayerToken({
 
   return (
     <Group
+      id={`player-${id}`}
       x={px}
       y={py}
       draggable={isInteractive}

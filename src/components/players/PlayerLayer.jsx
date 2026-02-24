@@ -12,7 +12,6 @@ import PlayerToken from './PlayerToken'
  */
 export default function PlayerLayer({
   pitchRect,
-  activePhase,
   dropTargetId,
   pendingSubMode,
   tokenScale,
@@ -31,22 +30,17 @@ export default function PlayerLayer({
 
   return (
     <Layer>
-      {starters.map((player) => {
-        // Show the phase for this player's team
-        const phase = activePhase?.[player.team] ?? 'in'
-        return (
-          <PlayerToken
-            key={player.id}
-            player={player}
-            pitchRect={pitchRect}
-            phase={phase}
-            isDropTarget={player.id === dropTargetId}
-            pendingSubMode={pendingSubMode}
-            tokenScale={tokenScale ?? 1}
-            readOnly={readOnly}
-          />
-        )
-      })}
+      {starters.map((player) => (
+        <PlayerToken
+          key={player.id}
+          player={player}
+          pitchRect={pitchRect}
+          isDropTarget={player.id === dropTargetId}
+          pendingSubMode={pendingSubMode}
+          tokenScale={tokenScale ?? 1}
+          readOnly={readOnly}
+        />
+      ))}
     </Layer>
   )
 }

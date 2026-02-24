@@ -2,19 +2,18 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useBoardStore } from '../../store/boardStore'
 
 export default function ConfirmFormationModal() {
-  const { confirmDialogOpen, pendingFormationApply, closeConfirmDialog, setActiveFormation } = useSettingsStore()
+  const { confirmDialogOpen, pendingFormationApply, closeConfirmDialog, setActiveFormationKey } = useSettingsStore()
   const applyFormation = useBoardStore((s) => s.applyFormation)
 
   if (!confirmDialogOpen) return null
 
-  const teamLabel  = pendingFormationApply?.team === 'home' ? 'Home' : 'Away'
-  const phaseLabel = pendingFormationApply?.phase === 'out' ? 'out-of-possession' : 'in-possession'
+  const teamLabel = pendingFormationApply?.team === 'home' ? 'Home' : 'Away'
 
   const handleConfirm = () => {
     if (pendingFormationApply) {
-      const { team, players, formationKey, phase } = pendingFormationApply
-      applyFormation(team, players, phase)
-      setActiveFormation(team, phase, formationKey)
+      const { team, players, formationKey } = pendingFormationApply
+      applyFormation(team, players)
+      setActiveFormationKey(team, formationKey)
     }
     closeConfirmDialog()
   }
@@ -31,8 +30,9 @@ export default function ConfirmFormationModal() {
       <div className="bg-panel border border-border rounded-xl p-5 w-72 shadow-2xl">
         <h3 className="text-sm font-semibold text-text-primary mb-1.5">Replace formation?</h3>
         <p className="text-[11px] text-text-muted mb-5 leading-relaxed">
-          This will replace the <span className="text-text-primary font-medium">{teamLabel}</span> team's{' '}
-          <span className="text-text-primary font-medium">{phaseLabel}</span> formation.
+          This will replace the{' '}
+          <span className="text-text-primary font-medium">{teamLabel}</span> team&apos;s current formation.
+          Player positions will be reset.
         </p>
         <div className="flex gap-2 justify-end">
           <button

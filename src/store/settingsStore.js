@@ -5,50 +5,59 @@ export const useSettingsStore = create((set) => ({
   showPlayerNames: true,
   selectedPlayerId: null,
   confirmDialogOpen: false,
-  pendingFormationApply: null, // { team, players, formationKey, phase }
+  pendingFormationApply: null, // { team, players, formationKey }
   pendingSubId: null,          // id of sub selected for touch substitution
 
   // Drawing color — used by all drawing tools
   drawColor: '#ffffff',
+  // Which drawing is currently selected (in select tool mode)
+  selectedDrawingId: null,
   // Note panel — which player's note is open
   notePlayerId: null,
   // Team notes panel open
   teamNotesPanelOpen: false,
 
   // Animation
-  activeFrameId: null,   // null = live board, string = frame id being previewed
   isPlaying: false,
+  // When true, FrameTimeline shows the "Animate?" toast.
+  // Set by any code path that adds a frame (Toolbar or FrameTimeline).
+  frameToastPending: false,
 
-  // Which phase is being viewed/edited per team: 'in' | 'out'
-  activePhase: { home: 'in', away: 'in' },
+  // Left panel collapsed state (desktop only). Initialised from localStorage.
+  leftPanelCollapsed: (() => {
+    try { return localStorage.getItem('leftPanelCollapsed') === 'true' } catch { return false }
+  })(),
 
-  // Which formation is active per team per phase
-  activeFormations: {
-    home: { in: null, out: null },
-    away: { in: null, out: null },
-  },
+  // Tactical phase — global annotation, null = none selected
+  // 'build' | 'progress' | 'final' | 'defend' | 'transition' | null
+  activePhase: null,
+
+  // Active formation key per team (replaces old activeFormations[team][phase])
+  activeFormationKey: { home: null, away: null },
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setShowPlayerNames: (v) => set({ showPlayerNames: v }),
   setSelectedPlayerId: (id) => set({ selectedPlayerId: id }),
   setPendingSubId: (id) => set({ pendingSubId: id }),
   setDrawColor: (color) => set({ drawColor: color }),
+  setSelectedDrawingId: (id) => set({ selectedDrawingId: id }),
   setNotePlayerId: (id) => set({ notePlayerId: id }),
   setTeamNotesPanelOpen: (v) => set({ teamNotesPanelOpen: v }),
-  setActiveFrameId: (id) => set({ activeFrameId: id }),
   setIsPlaying: (v) => set({ isPlaying: v }),
+  setFrameToastPending: (v) => set({ frameToastPending: v }),
 
-  setActivePhase: (team, phase) =>
-    set((s) => ({
-      activePhase: { ...s.activePhase, [team]: phase },
-    })),
+  setLeftPanelCollapsed: (v) => {
+    try { localStorage.setItem('leftPanelCollapsed', String(v)) } catch {}
+    return set({ leftPanelCollapsed: v })
+  },
 
-  setActiveFormation: (team, phase, formationKey) =>
+  // Toggle phase — clicking the active phase again clears it
+  setActivePhase: (phase) =>
+    set((s) => ({ activePhase: s.activePhase === phase ? null : phase })),
+
+  setActiveFormationKey: (team, key) =>
     set((s) => ({
-      activeFormations: {
-        ...s.activeFormations,
-        [team]: { ...s.activeFormations[team], [phase]: formationKey },
-      },
+      activeFormationKey: { ...s.activeFormationKey, [team]: key },
     })),
 
   openConfirmDialog: (pendingFormationApply) =>

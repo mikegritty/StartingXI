@@ -20,7 +20,7 @@ export default function PlayerNoteSheet() {
   const setNotePlayerId = useSettingsStore((s) => s.setNotePlayerId)
   const players         = useBoardStore((s) => s.board.players)
   const updatePlayerNote = useBoardStore((s) => s.updatePlayerNote)
-  const frames          = useBoardStore((s) => s.board.frames)
+  const frames          = useBoardStore((s) => s.board.play.frames)
 
   const player = players.find((p) => p.id === notePlayerId) ?? null
 
@@ -56,8 +56,8 @@ export default function PlayerNoteSheet() {
   const remaining = MAX_NOTE - draft.length
 
   // On mobile the toolbar is 44px + optional FrameTimeline 40px + safe-area.
-  // Position the sheet above all of these so nothing is obscured.
-  const hasFrames = frames.length > 0
+  // FrameTimeline only renders when frames.length >= 2 (matches FrameTimeline's own guard).
+  const hasFrames = frames.length >= 2
   const mobileBottomOffset = hasFrames
     ? 'calc(44px + 40px + env(safe-area-inset-bottom, 0px))'
     : 'calc(44px + env(safe-area-inset-bottom, 0px))'

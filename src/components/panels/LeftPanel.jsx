@@ -1,8 +1,62 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import FormationPresets from '../players/FormationPresets'
 import SquadEditor from '../squad/SquadEditor'
+import { PHASES } from '../../data/phases'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
+
+const PLAYS_KEY = 'startingxi_plays'
+const MAX_PLAYS = 20
+
+// ── localStorage helpers ──────────────────────────────────────────────────────
+
+function loadPlays() {
+  try {
+    return JSON.parse(localStorage.getItem(PLAYS_KEY) ?? '[]')
+  } catch { return [] }
+}
+
+function savePlaysToStorage(plays) {
+  localStorage.setItem(PLAYS_KEY, JSON.stringify(plays))
+}
+
+// ── PhasePills ────────────────────────────────────────────────────────────────
+
+function PhasePills() {
+  const activePhase    = useSettingsStore((s) => s.activePhase)
+  const setActivePhase = useSettingsStore((s) => s.setActivePhase)
+
+  return (
+    <div>
+      <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+        Phase
+      </label>
+      <div className="flex flex-wrap gap-1">
+        {PHASES.map(({ id, label, color }) => {
+          const active = activePhase === id
+          return (
+            <button
+              key={id}
+              onClick={() => setActivePhase(id)}
+              className="text-[10px] px-2 py-1 rounded-full border font-medium transition-all"
+              style={{
+                backgroundColor: active ? color : 'transparent',
+                borderColor: color,
+                color: active ? '#fff' : color,
+                opacity: active ? 1 : 0.7,
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── TeamSection ───────────────────────────────────────────────────────────────
 
 function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
   const teamData     = useBoardStore((s) => s.board.teams[team])
@@ -112,6 +166,13 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
           {/* Formation picker */}
           <FormationPresets team={team} />
 
+          {/* Tactical phase pills — only under Home team */}
+          {isHome && (
+            <div className="pt-3 border-t border-border">
+              <PhasePills />
+            </div>
+          )}
+
           {/* Player names toggle — only under Home team */}
           {showNamesToggle && (
             <div className="pt-3 border-t border-border">
@@ -141,7 +202,206 @@ function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
   )
 }
 
-export default function LeftPanel() {
+// ── MyPlays ───────────────────────────────────────────────────────────────────
+
+function MyPlays() {
+  const board     = useBoardStore((s) => s.board)
+  const loadBoard = useBoardStore((s) => s.loadBoard)
+
+  const [plays, setPlays]       = useState(() => loadPlays())
+  const [saving, setSaving]     = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const saveInputRef            = useRef(null)
+
+  useEffect(() => {
+    if (saving && saveInputRef.current) saveInputRef.current.focus()
+  }, [saving])
+
+  const handleSave = () => {
+    const name = saveName.trim() || board.name || 'Untitled'
+    const entry = {
+      id: uuidv4(),
+      name,
+      savedAt: Date.now(),
+      board: JSON.parse(JSON.stringify(board)),
+    }
+    const updated = [entry, ...plays].slice(0, MAX_PLAYS)
+    savePlaysToStorage(updated)
+    setPlays(updated)
+    setSaving(false)
+    setSaveName('')
+  }
+
+  const handleLoad = (entry) => {
+    if (!window.confirm(`Load "${entry.name}"? Unsaved changes will be lost.`)) return
+    loadBoard(entry.board)
+  }
+
+  const handleDelete = (id) => {
+    const updated = plays.filter((p) => p.id !== id)
+    savePlaysToStorage(updated)
+    setPlays(updated)
+  }
+
+  const formatDate = (ts) => {
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <div>
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+          My Plays
+        </p>
+        {!saving && (
+          <button
+            onClick={() => { setSaving(true); setSaveName(board.name || '') }}
+            className="text-[10px] px-2 py-0.5 rounded border border-border
+                       text-text-muted hover:text-text-primary hover:border-accent-blue
+                       transition-colors"
+            title="Save current board as a play"
+          >
+            + Save
+          </button>
+        )}
+      </div>
+
+      {/* Inline save input */}
+      {saving && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <input
+            ref={saveInputRef}
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSave()
+              if (e.key === 'Escape') { setSaving(false); setSaveName('') }
+            }}
+            placeholder="Play name..."
+            className="flex-1 min-w-0 text-xs bg-surface border border-accent-blue rounded px-2 py-1
+                       text-text-primary outline-none placeholder:text-text-muted"
+          />
+          <button
+            onClick={handleSave}
+            className="text-[10px] px-2 py-1 rounded bg-accent-blue text-white
+                       hover:bg-blue-700 transition-colors font-medium shrink-0"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => { setSaving(false); setSaveName('') }}
+            className="text-[10px] text-text-muted hover:text-text-primary transition-colors shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Play list */}
+      {plays.length === 0 ? (
+        <p className="text-[11px] text-text-muted italic">No saved plays yet.</p>
+      ) : (
+        <div className="space-y-0.5">
+          {plays.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-md group
+                         hover:bg-white/[0.04] transition-colors"
+            >
+              <span className="flex-1 min-w-0 text-[11px] text-text-primary truncate">
+                {entry.name}
+              </span>
+              <span className="text-[9px] text-text-muted shrink-0 tabular-nums">
+                {formatDate(entry.savedAt)}
+              </span>
+              <button
+                onClick={() => handleLoad(entry)}
+                className="text-[9px] text-text-muted hover:text-accent-blue transition-colors
+                           opacity-0 group-hover:opacity-100 shrink-0 font-medium"
+                title="Load play"
+              >
+                Load
+              </button>
+              <button
+                onClick={() => handleDelete(entry.id)}
+                className="text-[9px] text-text-muted hover:text-red-400 transition-colors
+                           opacity-0 group-hover:opacity-100 shrink-0"
+                title="Delete play"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main LeftPanel ────────────────────────────────────────────────────────────
+
+export default function LeftPanel({ collapsed = false, onExpand }) {
+  // Collapsed icon rail (desktop only)
+  if (collapsed) {
+    return (
+      <aside className="w-10 shrink-0 border-r border-border bg-panel flex flex-col items-center py-3 gap-1">
+        {/* Hamburger — expand */}
+        <button
+          onClick={onExpand}
+          title="Expand panel"
+          className="w-8 h-8 flex items-center justify-center rounded-md
+                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2 3h10M2 7h10M2 11h10"/>
+          </svg>
+        </button>
+
+        <div className="w-5 h-px bg-border my-1" />
+
+        {/* Home + Away icons */}
+        <button
+          onClick={onExpand}
+          title="Home team"
+          className="w-8 h-8 flex items-center justify-center rounded-md
+                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="7" cy="5" r="2.5"/>
+            <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+          </svg>
+        </button>
+
+        <button
+          onClick={onExpand}
+          title="Away team"
+          className="w-8 h-8 flex items-center justify-center rounded-md
+                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="7" cy="5" r="2.5"/>
+            <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+          </svg>
+        </button>
+
+        <div className="flex-1" />
+
+        {/* My Plays icon */}
+        <button
+          onClick={onExpand}
+          title="My Plays"
+          className="w-8 h-8 flex items-center justify-center rounded-md
+                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2 4h10M2 7h10M2 10h6"/>
+          </svg>
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="w-full md:w-56 md:shrink-0 md:border-r border-border bg-panel flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-0">
@@ -160,6 +420,11 @@ export default function LeftPanel() {
 
         {/* Away team — collapsed by default */}
         <TeamSection team="away" defaultOpen={false} />
+
+        {/* My Plays */}
+        <div className="mt-8 pt-4 border-t border-border">
+          <MyPlays />
+        </div>
 
       </div>
     </aside>

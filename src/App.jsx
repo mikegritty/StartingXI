@@ -9,11 +9,15 @@ import PlayerNoteSheet from './components/panels/PlayerNoteSheet'
 import TeamNotesPanel from './components/panels/TeamNotesPanel'
 import FrameTimeline from './components/animation/FrameTimeline'
 import { useMobile } from './hooks/useMobile'
+import { useSettingsStore } from './store/settingsStore'
 
 export default function App() {
   const isMobile = useMobile()
   // null = closed, 'left' = Team Setup, 'right' = Squad
   const [activeSheet, setActiveSheet] = useState(null)
+
+  const leftPanelCollapsed    = useSettingsStore((s) => s.leftPanelCollapsed)
+  const setLeftPanelCollapsed = useSettingsStore((s) => s.setLeftPanelCollapsed)
 
   const toggleSheet = (panel) => {
     setActiveSheet((prev) => (prev === panel ? null : panel))
@@ -21,11 +25,16 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-full bg-surface overflow-hidden">
-      <TopBar />
+      <TopBar onToggleLeftPanel={() => setLeftPanelCollapsed(!leftPanelCollapsed)} />
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* ── Desktop panels (md+) ── */}
-        {!isMobile && <LeftPanel />}
+        {!isMobile && (
+          <LeftPanel
+            collapsed={leftPanelCollapsed}
+            onExpand={() => setLeftPanelCollapsed(false)}
+          />
+        )}
         <PitchCanvas />
         {!isMobile && <RightPanel />}
 

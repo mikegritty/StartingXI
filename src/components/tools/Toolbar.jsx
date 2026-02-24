@@ -3,45 +3,61 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useBoardStore } from '../../store/boardStore'
 
 const TOOLS = [
-  { id: 'select',    label: 'Select (V)',       icon: (
+  { id: 'select',    label: 'Select (V)',
+    tooltip: 'Select & move players. Tap a drawing to edit or delete it.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
       <path d="M2 1l10 5.5-4.5 1.5-2 4.5L2 1z"/>
     </svg>
   )},
-  { id: 'pass',      label: 'Pass (A)',         icon: (
+  { id: 'pass',      label: 'Pass (A)',
+    tooltip: 'Pass — draw a straight arrow showing ball movement. ⚽ marks the start.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 12L12 2M12 2H7M12 2V7"/>
     </svg>
   )},
-  { id: 'run',       label: 'Run (C)',          icon: (
+  { id: 'run',       label: 'Run (C)',
+    tooltip: 'Run — curved arrow showing a player\'s run off the ball.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 12 Q 2 2 12 2" />
       <path d="M12 2H8M12 2V6" fill="none"/>
     </svg>
   )},
-  { id: 'dribble',   label: 'Dribble (D)',      icon: (
+  { id: 'dribble',   label: 'Dribble (D)',
+    tooltip: 'Dribble — dashed arrow showing a player carrying the ball.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2">
       <path d="M2 12L12 2" strokeDasharray="0"/>
       <path d="M12 2H7M12 2V7" strokeDasharray="0"/>
       <path d="M2 12L9 5"/>
     </svg>
   )},
-  { id: 'zone',      label: 'Zone (Z)',         icon: (
+  { id: 'zone',      label: 'Zone (Z)',
+    tooltip: 'Zone — draw a highlighted rectangular area.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="3" width="10" height="8" rx="1"/>
     </svg>
   )},
-  { id: 'highlight', label: 'Highlight (H)',    icon: (
+  { id: 'highlight', label: 'Highlight (H)',
+    tooltip: 'Highlight — draw a highlighted ellipse to mark a space or player.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="7" cy="7" r="5"/>
     </svg>
   )},
-  { id: 'text',      label: 'Text (T)',         icon: (
+  { id: 'text',      label: 'Text (T)',
+    tooltip: 'Text — tap the pitch to add a text annotation.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
       <path d="M2 3h10v1.5H8.5v7h-3v-7H2V3z"/>
     </svg>
   )},
-  { id: 'eraser',    label: 'Eraser (E)',       icon: (
+  { id: 'eraser',    label: 'Eraser (E)',
+    tooltip: 'Eraser — tap a drawing to remove it. Or use Select tool then tap ✕.',
+    icon: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M9 2L12 5L5 12H2V9L9 2Z"/>
       <path d="M6.5 3.5L10.5 7.5"/>
@@ -71,9 +87,9 @@ export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
   const drawColor     = useSettingsStore((s) => s.drawColor)
   const setDrawColor  = useSettingsStore((s) => s.setDrawColor)
 
-  const addFrame      = useBoardStore((s) => s.addFrame)
-  const frames        = useBoardStore((s) => s.board.frames)
-  const setActiveFrameId = useSettingsStore((s) => s.setActiveFrameId)
+  const addFrame              = useBoardStore((s) => s.addFrame)
+  const frames                = useBoardStore((s) => s.board.play.frames)
+  const setFrameToastPending  = useSettingsStore((s) => s.setFrameToastPending)
 
   const colorInputRef = useRef(null)
 
@@ -82,11 +98,10 @@ export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
 
   const handleAddFrame = () => {
     if (frames.length >= 8) return
+    // addFrame() atomically snapshots the canvas, appends the frame, and jumps to it.
     addFrame()
-    setTimeout(() => {
-      const latest = useBoardStore.getState().board.frames.at(-1)
-      if (latest) setActiveFrameId(latest.id)
-    }, 0)
+    // Signal FrameTimeline to show the animate offer toast.
+    setFrameToastPending(true)
   }
 
   return (
@@ -155,7 +170,7 @@ export default function Toolbar({ isMobile, activeSheet, onToggleSheet }) {
             )}
             <button
               onClick={() => setActiveTool(tool.id)}
-              title={tool.label}
+              title={tool.tooltip ?? tool.label}
               className={`
                 flex items-center justify-center w-8 h-8 rounded-md transition-colors
                 ${activeTool === tool.id

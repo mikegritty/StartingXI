@@ -4,99 +4,131 @@ import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 
 const ALL_FORMATION_KEYS = Object.keys(FORMATIONS)
-// Formations that appear in the "More…" dropdown (everything not in quick-pick)
+// Formations that appear in the "More formations…" dropdown (everything not in quick-pick)
 const MORE_FORMATIONS = ALL_FORMATION_KEYS.filter((k) => !QUICK_FORMATIONS.includes(k))
 
+// Threshold (normalized) beyond which a player is considered "moved" from canonical position
+const MOVED_THRESHOLD = 0.02
+
+/**
+ * FormationPresets — horizontal scrollable chip row.
+ *
+ * Chips: [4-3-3] [4-4-2] [4-2-3-1] [3-5-2] [3-4-3] [4-5-1] [+Custom] [More ▾]
+ *
+ * Active chip shows an asterisk (*) if any home starter has been manually moved
+ * more than MOVED_THRESHOLD from the canonical position.
+ */
 export default function FormationPresets({ team }) {
-  const players            = useBoardStore((s) => s.board.players)
-  const applyFormation     = useBoardStore((s) => s.applyFormation)
-  const openConfirmDialog  = useSettingsStore((s) => s.openConfirmDialog)
-  const setActiveFormation = useSettingsStore((s) => s.setActiveFormation)
-  const activeFormations   = useSettingsStore((s) => s.activeFormations)
-  const activePhase        = useSettingsStore((s) => s.activePhase[team])
-  const setActivePhase     = useSettingsStore((s) => s.setActivePhase)
+  const players               = useBoardStore((s) => s.board.players)
+  const applyFormation        = useBoardStore((s) => s.applyFormation)
+  const openConfirmDialog     = useSettingsStore((s) => s.openConfirmDialog)
+  const activeFormationKey    = useSettingsStore((s) => s.activeFormationKey[team])
+  const setActiveFormationKey = useSettingsStore((s) => s.setActiveFormationKey)
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
-  const currentFormation = activeFormations[team][activePhase]
-  const teamHasPlayers   = players.some((p) => p.team === team)
+  const teamHasPlayers = players.some((p) => p.team === team)
+
+  // Compute whether the active formation has been modified (any starter moved beyond threshold)
+  const isModified = (() => {
+    if (!activeFormationKey) return false
+    const formation = FORMATIONS[activeFormationKey]
+    if (!formation) return false
+    const starters = players.filter((p) => p.team === team && p.isStarter !== false)
+    return starters.some((player, i) => {
+      const canonical = formation.positions[i]
+      if (!canonical) return false
+      const cx = canonical.x
+      const cy = team === 'away' ? 1.0 - canonical.y : canonical.y
+      return (
+        Math.abs(player.x - cx) > MOVED_THRESHOLD ||
+        Math.abs(player.y - cy) > MOVED_THRESHOLD
+      )
+    })
+  })()
 
   const handleSelect = (formationKey) => {
     setDropdownOpen(false)
-    if (formationKey === currentFormation) return
+    if (formationKey === activeFormationKey) return
     const newPlayers = buildFormationPlayers(formationKey, team)
     if (teamHasPlayers) {
-      openConfirmDialog({ team, players: newPlayers, formationKey, phase: activePhase })
+      openConfirmDialog({ team, players: newPlayers, formationKey })
     } else {
-      applyFormation(team, newPlayers, activePhase)
-      setActiveFormation(team, activePhase, formationKey)
+      applyFormation(team, newPlayers)
+      setActiveFormationKey(team, formationKey)
     }
   }
 
-  // Is the active formation one of the "more" ones? If so show it selected in the dropdown button
-  const moreIsActive = currentFormation && MORE_FORMATIONS.includes(currentFormation)
+  const handleCustom = () => {
+    // Clear the active formation key — coach is free to drag freely
+    setActiveFormationKey(team, null)
+  }
+
+  // Is the active formation one of the "more" ones? Show it in the dropdown button.
+  const moreIsActive = activeFormationKey && MORE_FORMATIONS.includes(activeFormationKey)
 
   return (
     <div className="mt-2">
-      {/* In / Out possession phase tabs */}
-      <div className="flex rounded-md overflow-hidden border border-border mb-2.5">
-        {[
-          { key: 'in',  label: 'In Poss.' },
-          { key: 'out', label: 'Out of Poss.' },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActivePhase(team, key)}
-            className={`flex-1 text-[10px] py-1.5 font-semibold transition-colors
-              ${activePhase === key
-                ? 'bg-accent-blue text-white'
-                : 'bg-surface text-text-muted hover:text-text-primary'
-              }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Formation label */}
       <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1.5">
         Formation
       </p>
 
-      {/* Quick-pick row — 5 most common formations */}
-      <div className="grid grid-cols-3 gap-1 mb-1">
+      {/* Horizontal scrollable chip row */}
+      <div
+        className="flex gap-1 overflow-x-auto pb-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+      >
         {QUICK_FORMATIONS.map((key) => {
-          const isActive = key === currentFormation
+          const isActive = key === activeFormationKey
+          const label    = FORMATIONS[key].label + (isActive && isModified ? '*' : '')
           return (
             <button
               key={key}
               onClick={() => handleSelect(key)}
-              className={`text-[10px] py-1.5 px-1 rounded-md border font-medium tracking-tight
-                          transition-all duration-150 text-center
+              className={`text-[10px] py-1 px-2 rounded-md border font-medium tracking-tight
+                          transition-all duration-150 whitespace-nowrap shrink-0
                           ${isActive
                             ? 'bg-accent-blue border-accent-blue text-white shadow-sm'
                             : 'bg-surface border-border text-text-muted hover:border-accent-blue hover:text-text-primary'
                           }`}
             >
-              {FORMATIONS[key].label}
+              {label}
             </button>
           )
         })}
 
-        {/* More… dropdown trigger — spans remaining space */}
-        <div className="relative col-span-3">
+        {/* +Custom chip — clears the active formation */}
+        <button
+          onClick={handleCustom}
+          className={`text-[10px] py-1 px-2 rounded-md border font-medium tracking-tight
+                      transition-all duration-150 whitespace-nowrap shrink-0
+                      ${activeFormationKey === null
+                        ? 'bg-accent-blue border-accent-blue text-white shadow-sm'
+                        : 'bg-surface border-border text-text-muted hover:border-accent-blue hover:text-text-primary'
+                      }`}
+          title="Custom — drag players freely"
+        >
+          +Custom
+        </button>
+
+        {/* More ▾ dropdown trigger */}
+        <div className="relative shrink-0">
           <button
             onClick={() => setDropdownOpen((o) => !o)}
-            className={`w-full text-[10px] py-1.5 px-2 rounded-md border font-medium
-                        transition-all duration-150 flex items-center justify-between
+            className={`text-[10px] py-1 px-2 rounded-md border font-medium
+                        transition-all duration-150 flex items-center gap-1
                         ${moreIsActive
                           ? 'bg-accent-blue border-accent-blue text-white shadow-sm'
                           : 'bg-surface border-border text-text-muted hover:border-accent-blue hover:text-text-primary'
                         }`}
           >
-            <span>{moreIsActive ? FORMATIONS[currentFormation].label : 'More formations…'}</span>
+            <span>
+              {moreIsActive
+                ? (FORMATIONS[activeFormationKey].label + (isModified ? '*' : ''))
+                : 'More'}
+            </span>
             <svg
-              width="10" height="10" viewBox="0 0 10 10" fill="none"
+              width="8" height="8" viewBox="0 0 10 10" fill="none"
               className={`transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
             >
               <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
@@ -110,10 +142,10 @@ export default function FormationPresets({ team }) {
                 className="fixed inset-0 z-10"
                 onClick={() => setDropdownOpen(false)}
               />
-              <div className="absolute left-0 right-0 top-full mt-1 z-20
-                              bg-panel border border-border rounded-md shadow-lg overflow-hidden">
+              <div className="absolute left-0 top-full mt-1 z-20
+                              bg-panel border border-border rounded-md shadow-lg overflow-hidden min-w-[120px]">
                 {MORE_FORMATIONS.map((key) => {
-                  const isActive = key === currentFormation
+                  const isActive = key === activeFormationKey
                   return (
                     <button
                       key={key}

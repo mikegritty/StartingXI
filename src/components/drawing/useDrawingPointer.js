@@ -23,8 +23,9 @@ import { useBoardStore } from '../../store/boardStore'
  * @returns {{ preview, textPending, handlers, clearTextPending }}
  */
 export function useDrawingPointer(pitchRect, stageRef) {
-  const activeTool    = useSettingsStore((s) => s.activeTool)
-  const drawColor     = useSettingsStore((s) => s.drawColor)
+  const activeTool           = useSettingsStore((s) => s.activeTool)
+  const drawColor            = useSettingsStore((s) => s.drawColor)
+  const setSelectedDrawingId = useSettingsStore((s) => s.setSelectedDrawingId)
   const addDrawing    = useBoardStore((s) => s.addDrawing)
   const removeDrawing = useBoardStore((s) => s.removeDrawing)
   const drawings      = useBoardStore((s) => s.board.drawings)
@@ -36,18 +37,20 @@ export function useDrawingPointer(pitchRect, stageRef) {
   const [textPending, setTextPending] = useState(null)
 
   // ── Mutable refs — no stale-closure risk ────────────────────────────────
-  const isDrawing     = useRef(false)
-  const startNorm     = useRef(null)         // { nx, ny }
-  const freePoints    = useRef([])           // flat array [x0,y0,x1,y1,...] normalized
-  const previewRef    = useRef(null)         // mirrors preview state so handlePointerUp is stable
-  const activeToolRef = useRef(activeTool)   // mirrors activeTool — updated every render
-  const drawColorRef  = useRef(drawColor)    // mirrors drawColor — updated every render
-  const drawingsRef   = useRef(drawings)     // mirrors drawings — updated every render
+  const isDrawing              = useRef(false)
+  const startNorm              = useRef(null)         // { nx, ny }
+  const freePoints             = useRef([])           // flat array [x0,y0,x1,y1,...] normalized
+  const previewRef             = useRef(null)         // mirrors preview state so handlePointerUp is stable
+  const activeToolRef          = useRef(activeTool)   // mirrors activeTool — updated every render
+  const drawColorRef           = useRef(drawColor)    // mirrors drawColor — updated every render
+  const drawingsRef            = useRef(drawings)     // mirrors drawings — updated every render
+  const setSelectedDrawingRef  = useRef(setSelectedDrawingId) // stable ref so handlePointerDown can clear selection
 
   // Keep refs in sync with store values on every render
-  activeToolRef.current = activeTool
-  drawColorRef.current  = drawColor
-  drawingsRef.current   = drawings
+  activeToolRef.current         = activeTool
+  drawColorRef.current          = drawColor
+  drawingsRef.current           = drawings
+  setSelectedDrawingRef.current = setSelectedDrawingId
 
   // Helper: sync preview state + ref together
   const updatePreview = (valOrFn) => {
@@ -74,6 +77,8 @@ export function useDrawingPointer(pitchRect, stageRef) {
     const color = drawColorRef.current
 
     if (tool === 'select') return
+    // Any drawing action clears the drawing selection
+    setSelectedDrawingRef.current?.(null)
     // Only respond to left mouse / primary touch
     if (e.evt.button !== undefined && e.evt.button !== 0) return
 

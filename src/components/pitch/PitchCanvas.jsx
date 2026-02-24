@@ -1,4 +1,5 @@
 import { Stage } from 'react-konva'
+import Konva from 'konva'
 import { useRef, useState, useEffect } from 'react'
 import PitchLines from './PitchLines'
 import PlayerLayer from '../players/PlayerLayer'
@@ -9,6 +10,8 @@ import { useDrawingPointer } from '../drawing/useDrawingPointer'
 import { getPitchRect, normToPixel } from '../../utils/positions'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
+import { PHASES } from '../../data/phases'
+import { useMobile } from '../../hooks/useMobile'
 
 const TOKEN_RADIUS = 18  // must match PlayerToken.jsx
 
@@ -30,13 +33,26 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
   const storeZoneOverlay      = useBoardStore((s) => s.board.pitch.zoneOverlay)
   const storePlayers          = useBoardStore((s) => s.board.players)
   const deselectAll           = useBoardStore((s) => s.deselectAll)
+  const removeDrawing         = useBoardStore((s) => s.removeDrawing)
   const substitutePlayer      = useBoardStore((s) => s.substitutePlayer)
   const setSelectedPlayerId   = useSettingsStore((s) => s.setSelectedPlayerId)
+  const selectedDrawingId     = useSettingsStore((s) => s.selectedDrawingId)
+  const setSelectedDrawingId  = useSettingsStore((s) => s.setSelectedDrawingId)
   const activePhase           = useSettingsStore((s) => s.activePhase)
+  const isPlaying             = useSettingsStore((s) => s.isPlaying)
   const pendingSubId          = useSettingsStore((s) => s.pendingSubId)
   const setPendingSubId       = useSettingsStore((s) => s.setPendingSubId)
   const activeTool            = useSettingsStore((s) => s.activeTool)
   const setActiveTool         = useSettingsStore((s) => s.setActiveTool)
+
+  const isMobile   = useMobile()
+  const phaseColor = PHASES.find((p) => p.id === activePhase)?.color
+
+  // Tween state — for position animation between frames
+  const animateBetweenFrames = useBoardStore((s) => s.board.play.animateBetweenFrames)
+  const frames               = useBoardStore((s) => s.board.play.frames)
+  const currentFrameIndex    = useBoardStore((s) => s.board.play.currentFrameIndex)
+  const prevFrameIndexRef    = useRef(currentFrameIndex)
 
   const zoneOverlay = readOnly ? (boardProp?.pitch?.zoneOverlay ?? 'none') : storeZoneOverlay
   const players     = readOnly ? (boardProp?.players ?? [])                : storePlayers
@@ -57,6 +73,10 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
   }, [])
 
   const pitchRect = getPitchRect(stageSize.width, stageSize.height, 36)
+  // Keep a ref to pitchRect so the tween effect always reads the latest value
+  // even when stageSize changes between renders.
+  const pitchRectRef = useRef(pitchRect)
+  pitchRectRef.current = pitchRect
 
   // Scale tokens relative to pitch width — keeps them proportional on narrow mobile screens
   // Reference width 560px = 1.0 scale. Clamp between 0.7 and 1.1.
@@ -79,12 +99,61 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
     const handleKey = (ev) => {
       // Don't capture when typing in an input
       if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return
+
+      // Delete / Backspace — delete selected drawing
+      if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        const selId = useSettingsStore.getState().selectedDrawingId
+        if (selId) {
+          ev.preventDefault()
+          removeDrawing(selId)
+          setSelectedDrawingId(null)
+          return
+        }
+      }
+
       const tool = SHORTCUTS[ev.key.toLowerCase()]
       if (tool) setActiveTool(tool)
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [readOnly, setActiveTool])
+  }, [readOnly, setActiveTool, removeDrawing, setSelectedDrawingId])
+
+  // ── Konva.Tween — tween player positions between frames during playback ──
+
+  useEffect(() => {
+    const prevIdx = prevFrameIndexRef.current
+    prevFrameIndexRef.current = currentFrameIndex
+
+    // Only tween when playing with animation enabled and the index actually changed
+    if (!isPlaying || !animateBetweenFrames) return
+    if (prevIdx === currentFrameIndex) return
+    if (!stageRef.current) return
+
+    const prevFrame = frames[prevIdx]
+    const nextFrame = frames[currentFrameIndex]
+    if (!prevFrame || !nextFrame) return
+
+    nextFrame.players.forEach((nextPlayer) => {
+      const prev = prevFrame.players.find((p) => p.id === nextPlayer.id)
+      if (!prev) return
+      // Skip players that haven't moved
+      if (prev.x === nextPlayer.x && prev.y === nextPlayer.y) return
+
+      const node = stageRef.current.findOne(`#player-${nextPlayer.id}`)
+      if (!node) return
+
+      const { px: targetX, py: targetY } = normToPixel(nextPlayer.x, nextPlayer.y, pitchRectRef.current)
+      const tween = new Konva.Tween({
+        node,
+        duration: 0.8,   // 800ms per spec
+        easing: Konva.Easings.EaseInOut,
+        x: targetX,
+        y: targetY,
+        onFinish: () => tween.destroy(),
+      })
+      tween.play()
+    })
+  }, [currentFrameIndex]) // eslint-disable-line
 
   // ── Drawing pointer hook ──────────────────────────────────────────────────
 
@@ -99,6 +168,7 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
     if (e.target === e.target.getStage()) {
       deselectAll()
       setSelectedPlayerId(null)
+      setSelectedDrawingId(null)   // clear drawing selection on background tap
     }
   }
 
@@ -109,10 +179,7 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
     let closestDist = TOKEN_RADIUS * 2.5  // generous hit radius
 
     for (const p of starters) {
-      const phase = activePhase?.home ?? 'in'
-      const nx = p[`x_${phase}`] ?? p.x
-      const ny = p[`y_${phase}`] ?? p.y
-      const { px, py } = normToPixel(nx, ny, pitchRect)
+      const { px, py } = normToPixel(p.x, p.y, pitchRect)
       const dist = Math.hypot(dropX - px, dropY - py)
       if (dist < closestDist) {
         closestDist = dist
@@ -179,6 +246,17 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
       onDragLeave={readOnly ? undefined : handleDragLeave}
       onDrop={readOnly ? undefined : handleDrop}
     >
+      {/* Phase colour band — 3px strip on left edge (desktop) or top edge (mobile) */}
+      {!readOnly && phaseColor && (
+        <div
+          className="absolute z-10 pointer-events-none"
+          style={isMobile
+            ? { top: 0, left: 0, right: 0, height: 3, backgroundColor: phaseColor }
+            : { top: 0, left: 0, bottom: 0, width: 3, backgroundColor: phaseColor }
+          }
+        />
+      )}
+
       <Stage
         ref={stageRef}
         width={stageSize.width}
@@ -197,6 +275,7 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
         <DrawingLayer
           pitchRect={pitchRect}
           drawings={readOnly ? (boardProp?.drawings ?? []) : undefined}
+          readOnly={readOnly}
         />
 
         {/* Live preview while drawing */}
@@ -206,7 +285,6 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
 
         <PlayerLayer
           pitchRect={pitchRect}
-          activePhase={readOnly ? { home: 'in', away: 'in' } : activePhase}
           dropTargetId={effectiveDropTarget}
           pendingSubMode={readOnly ? false : !!pendingSubId}
           tokenScale={tokenScale}
