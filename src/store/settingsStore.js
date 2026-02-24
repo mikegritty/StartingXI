@@ -30,6 +30,12 @@ export const useSettingsStore = create((set) => ({
     try { return localStorage.getItem('leftPanelCollapsed') === 'true' } catch { return false }
   })(),
 
+  // Active left-panel navigation section. Persisted to localStorage.
+  // 'squad' | 'games' | 'training' | 'schedule'
+  activeNavSection: (() => {
+    try { return localStorage.getItem('activeNavSection') || 'games' } catch { return 'games' }
+  })(),
+
   // Tactical phase — global annotation, null = none selected
   // 'build' | 'progress' | 'final' | 'defend' | 'transition' | null
   activePhase: null,
@@ -52,6 +58,11 @@ export const useSettingsStore = create((set) => ({
   setLeftPanelCollapsed: (v) => {
     try { localStorage.setItem('leftPanelCollapsed', String(v)) } catch {}
     return set({ leftPanelCollapsed: v })
+  },
+
+  setActiveNavSection: (section) => {
+    try { localStorage.setItem('activeNavSection', section) } catch {}
+    return set({ activeNavSection: section })
   },
 
   // Toggle phase — clicking the active phase again clears it
