@@ -4,59 +4,98 @@ import SquadEditor from '../squad/SquadEditor'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 
-function TeamSection({ team }) {
+function TeamSection({ team, defaultOpen = true }) {
   const teamData = useBoardStore((s) => s.board.teams[team])
   const setTeam  = useBoardStore((s) => s.setTeam)
   const isHome   = team === 'home'
   const label    = isHome ? 'Home' : 'Away'
+
+  const [open, setOpen]         = useState(defaultOpen)
   const [squadOpen, setSquadOpen] = useState(false)
 
   return (
     <div>
-      {/* Team header with Squad button */}
-      <div className="flex items-center gap-2 mb-2">
+      {/* ── Section header — click to expand/collapse ── */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 mb-0 group"
+      >
         <div
           className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white/10"
           style={{ backgroundColor: teamData.primaryColor }}
         />
-        <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+        <span className={`text-[11px] font-semibold uppercase tracking-wider transition-colors
+          ${open ? 'text-text-primary' : 'text-text-muted group-hover:text-text-primary'}`}>
           {label}
         </span>
-        <button
-          onClick={() => setSquadOpen(true)}
-          className="ml-auto text-[10px] px-2 py-0.5 rounded border border-border
-                     text-text-muted hover:text-text-primary hover:border-accent-blue
-                     transition-colors"
+        {!open && (
+          <span className="text-[10px] text-text-muted ml-1 font-normal normal-case tracking-normal">
+            {teamData.name || 'unnamed'}
+          </span>
+        )}
+
+        {/* Chevron */}
+        <svg
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          className={`ml-auto shrink-0 text-text-muted transition-transform group-hover:text-text-primary
+            ${open ? '' : '-rotate-90'}`}
         >
-          Squad
-        </button>
-      </div>
+          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
 
-      {/* Team name */}
-      <input
-        value={teamData.name}
-        onChange={(e) => setTeam(team, { name: e.target.value })}
-        className="w-full text-xs bg-surface border border-border rounded-md px-2.5 py-1.5
-                   text-text-primary focus:border-accent-blue outline-none mb-2
-                   placeholder:text-text-muted transition-colors"
-        placeholder="Team name..."
-      />
+        {/* Squad button — only when expanded, stop propagation so it doesn't toggle collapse */}
+        {open && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); setSquadOpen(true) }}
+            onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setSquadOpen(true))}
+            className="text-[10px] px-2 py-0.5 rounded border border-border
+                       text-text-muted hover:text-text-primary hover:border-accent-blue
+                       transition-colors cursor-pointer ml-1"
+          >
+            Squad
+          </span>
+        )}
+      </button>
 
-      {/* Kit colours */}
-      <div className="flex items-center gap-2 mb-0.5">
-        <label className="text-[11px] text-text-muted">Kit</label>
-        <input type="color" value={teamData.primaryColor}
-          onChange={(e) => setTeam(team, { primaryColor: e.target.value })}
-          className="w-6 h-6 rounded cursor-pointer" title="Kit colour" />
-        <label className="text-[11px] text-text-muted">Text</label>
-        <input type="color" value={teamData.secondaryColor}
-          onChange={(e) => setTeam(team, { secondaryColor: e.target.value })}
-          className="w-6 h-6 rounded cursor-pointer" title="Number colour" />
-      </div>
+      {/* ── Collapsible body ── */}
+      {open && (
+        <div className="mt-2 space-y-2">
+          {/* Team name */}
+          <input
+            value={teamData.name}
+            onChange={(e) => setTeam(team, { name: e.target.value })}
+            className="w-full text-xs bg-surface border border-border rounded-md px-2.5 py-1.5
+                       text-text-primary focus:border-accent-blue outline-none
+                       placeholder:text-text-muted transition-colors"
+            placeholder="Team name..."
+          />
 
-      <FormationPresets team={team} />
+          {/* Kit colours */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] text-text-muted">Kit</label>
+            <input
+              type="color"
+              value={teamData.primaryColor}
+              onChange={(e) => setTeam(team, { primaryColor: e.target.value })}
+              className="w-6 h-6 rounded cursor-pointer"
+              title="Kit colour"
+            />
+            <label className="text-[11px] text-text-muted">Text</label>
+            <input
+              type="color"
+              value={teamData.secondaryColor}
+              onChange={(e) => setTeam(team, { secondaryColor: e.target.value })}
+              className="w-6 h-6 rounded cursor-pointer"
+              title="Number colour"
+            />
+          </div>
 
-      {/* Squad editor modal */}
+          <FormationPresets team={team} />
+        </div>
+      )}
+
       {squadOpen && <SquadEditor team={team} onClose={() => setSquadOpen(false)} />}
     </div>
   )
@@ -69,13 +108,24 @@ export default function LeftPanel() {
   return (
     <aside className="w-full md:w-56 md:shrink-0 md:border-r border-border bg-panel flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-0">
-        <TeamSection team="home" />
-        <div className="border-t border-border my-3" />
-        <TeamSection team="away" />
-        <div className="border-t border-border my-3" />
 
-        {/* Display toggle */}
-        <div>
+        {/* Home team — open by default */}
+        <TeamSection team="home" defaultOpen={true} />
+
+        {/* Divider with Away label */}
+        <div className="flex items-center gap-2 my-4">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/50 px-1">
+            vs
+          </span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Away team — collapsed by default */}
+        <TeamSection team="away" defaultOpen={false} />
+
+        {/* Display settings */}
+        <div className="mt-5 pt-4 border-t border-border">
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
             Display
           </p>
@@ -93,6 +143,7 @@ export default function LeftPanel() {
             </span>
           </button>
         </div>
+
       </div>
     </aside>
   )
