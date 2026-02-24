@@ -4,13 +4,15 @@ import SquadEditor from '../squad/SquadEditor'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 
-function TeamSection({ team, defaultOpen = true }) {
-  const teamData = useBoardStore((s) => s.board.teams[team])
-  const setTeam  = useBoardStore((s) => s.setTeam)
-  const isHome   = team === 'home'
-  const label    = isHome ? 'Home' : 'Away'
+function TeamSection({ team, defaultOpen = true, showNamesToggle = false }) {
+  const teamData     = useBoardStore((s) => s.board.teams[team])
+  const setTeam      = useBoardStore((s) => s.setTeam)
+  const showNames    = useSettingsStore((s) => s.showPlayerNames)
+  const setShowNames = useSettingsStore((s) => s.setShowPlayerNames)
+  const isHome       = team === 'home'
+  const label        = isHome ? 'Home' : 'Away'
 
-  const [open, setOpen]         = useState(defaultOpen)
+  const [open, setOpen]           = useState(defaultOpen)
   const [squadOpen, setSquadOpen] = useState(false)
 
   return (
@@ -54,7 +56,7 @@ function TeamSection({ team, defaultOpen = true }) {
                        text-text-muted hover:text-text-primary hover:border-accent-blue
                        transition-colors cursor-pointer ml-1"
           >
-            Squad
+            Edit Squad
           </span>
         )}
       </button>
@@ -93,6 +95,28 @@ function TeamSection({ team, defaultOpen = true }) {
           </div>
 
           <FormationPresets team={team} />
+
+          {/* Player names toggle — only under Home team */}
+          {showNamesToggle && (
+            <div className="pt-2 border-t border-border">
+              <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
+                Display
+              </p>
+              <button
+                onClick={() => setShowNames(!showNames)}
+                className="flex items-center gap-2 group w-full"
+              >
+                <div className={`w-8 h-4 rounded-full relative transition-colors
+                  ${showNames ? 'bg-accent-blue' : 'bg-border'}`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform
+                    ${showNames ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+                <span className="text-[11px] text-text-muted group-hover:text-text-primary transition-colors">
+                  Player names
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -102,17 +126,14 @@ function TeamSection({ team, defaultOpen = true }) {
 }
 
 export default function LeftPanel() {
-  const showNames    = useSettingsStore((s) => s.showPlayerNames)
-  const setShowNames = useSettingsStore((s) => s.setShowPlayerNames)
-
   return (
     <aside className="w-full md:w-56 md:shrink-0 md:border-r border-border bg-panel flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-0">
 
-        {/* Home team — open by default */}
-        <TeamSection team="home" defaultOpen={true} />
+        {/* Home team — open by default, hosts the player names toggle */}
+        <TeamSection team="home" defaultOpen={true} showNamesToggle={true} />
 
-        {/* Divider with Away label */}
+        {/* Divider */}
         <div className="flex items-center gap-2 my-4">
           <div className="flex-1 h-px bg-border" />
           <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/50 px-1">
@@ -123,26 +144,6 @@ export default function LeftPanel() {
 
         {/* Away team — collapsed by default */}
         <TeamSection team="away" defaultOpen={false} />
-
-        {/* Display settings */}
-        <div className="mt-5 pt-4 border-t border-border">
-          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
-            Display
-          </p>
-          <button
-            onClick={() => setShowNames(!showNames)}
-            className="flex items-center gap-2 group w-full"
-          >
-            <div className={`w-8 h-4 rounded-full relative transition-colors
-              ${showNames ? 'bg-accent-blue' : 'bg-border'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform
-                ${showNames ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </div>
-            <span className="text-[11px] text-text-muted group-hover:text-text-primary transition-colors">
-              Player names
-            </span>
-          </button>
-        </div>
 
       </div>
     </aside>
