@@ -134,7 +134,7 @@ export default function LeftPanel() {
         <TeamSection team="home" defaultOpen={true} showNamesToggle={true} />
 
         {/* Divider */}
-        <div className="flex items-center gap-2 my-4">
+        <div className="flex items-center gap-2 mt-8 mb-6">
           <div className="flex-1 h-px bg-border" />
           <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/50 px-1">
             vs
