@@ -19,11 +19,15 @@ const DEFAULT_BOARD = {
   // players have x/y for both phases:
   //   x, y           = in-possession position
   //   x_out, y_out   = out-of-possession position
-  // New fields:
   //   position       = tactical label string e.g. "CDM", "CB", "ST"
   //   isStarter      = boolean; true = on pitch canvas, false = substitute bench
+  //   note           = coach instructions for this player (plain text, max 500 chars)
   players: [],
+  // drawings: array of drawing objects (pass, run, dribble, zone, highlight, text)
+  // All positional values normalized 0–1 relative to pitchRect width/height
   drawings: [],
+  // frames: array of animation frame snapshots
+  frames: [],
   equipment: [],
   labels: [],
 }
@@ -65,6 +69,7 @@ export const useBoardStore = create((set, get) => ({
             selected: false,
             isStarter: true,
             position: player.role ?? 'MID',
+            note: '',
             ...player,
           },
         ],
@@ -97,6 +102,15 @@ export const useBoardStore = create((set, get) => ({
       },
     })),
 
+  // Update a player's match note
+  updatePlayerNote: (id, note) =>
+    set((s) => ({
+      board: {
+        ...s.board,
+        players: s.board.players.map((p) => (p.id === id ? { ...p, note } : p)),
+      },
+    })),
+
   selectPlayer: (id) =>
     set((s) => ({
       board: {
@@ -114,8 +128,6 @@ export const useBoardStore = create((set, get) => ({
     })),
 
   // applyFormation sets positions for one phase ('in' or 'out').
-  // Existing substitutes (isStarter === false) for the team are preserved.
-  // Existing starters are merged by index so out-of-possession coords are kept.
   applyFormation: (team, players, phase = 'in') =>
     set((s) => {
       const otherTeam    = s.board.players.filter((p) => p.team !== team)
@@ -124,13 +136,12 @@ export const useBoardStore = create((set, get) => ({
 
       const merged = players.map((newP, i) => {
         const old  = teamStarters[i]
-        const base = { ...newP, isStarter: true, position: newP.position ?? newP.role }
+        const base = { ...newP, isStarter: true, position: newP.position ?? newP.role, note: '' }
         if (!old) return base
         if (phase === 'out') {
           return { ...old, x_out: newP.x, y_out: newP.y, role: newP.role, number: newP.number }
         }
-        // Keep out-of-possession coords from existing player if they exist
-        return { ...base, x_out: old.x_out ?? old.x, y_out: old.y_out ?? old.y }
+        return { ...base, x_out: old.x_out ?? old.x, y_out: old.y_out ?? old.y, note: old.note ?? '' }
       })
 
       return {
@@ -142,8 +153,6 @@ export const useBoardStore = create((set, get) => ({
     }),
 
   // Swap a sub onto the pitch in place of a starter.
-  // subId becomes a starter (inherits starter's x/y/x_out/y_out).
-  // starterId becomes a sub (loses pitch coords).
   substitutePlayer: (subId, starterId) =>
     set((s) => ({
       board: {
@@ -179,6 +188,71 @@ export const useBoardStore = create((set, get) => ({
         ],
       },
     })),
+
+  // ── Drawing actions ──────────────────────────────────────────────────────
+
+  addDrawing: (drawing) =>
+    set((s) => ({
+      board: { ...s.board, drawings: [...s.board.drawings, drawing] },
+    })),
+
+  removeDrawing: (id) =>
+    set((s) => ({
+      board: { ...s.board, drawings: s.board.drawings.filter((d) => d.id !== id) },
+    })),
+
+  clearDrawings: () =>
+    set((s) => ({ board: { ...s.board, drawings: [] } })),
+
+  updateDrawing: (id, patch) =>
+    set((s) => ({
+      board: {
+        ...s.board,
+        drawings: s.board.drawings.map((d) => d.id === id ? { ...d, ...patch } : d),
+      },
+    })),
+
+  // ── Animation frame actions ──────────────────────────────────────────────
+
+  // Add current board state as a new animation frame
+  addFrame: (label) =>
+    set((s) => {
+      if (s.board.frames.length >= 8) return s // max 8 frames
+      const frame = {
+        id: uuidv4(),
+        label: label || `Frame ${s.board.frames.length + 1}`,
+        players:  s.board.players.map((p) => ({ ...p })),
+        drawings: s.board.drawings.map((d) => ({ ...d })),
+      }
+      return { board: { ...s.board, frames: [...s.board.frames, frame] } }
+    }),
+
+  removeFrame: (id) =>
+    set((s) => ({
+      board: { ...s.board, frames: s.board.frames.filter((f) => f.id !== id) },
+    })),
+
+  updateFrame: (id, patch) =>
+    set((s) => ({
+      board: {
+        ...s.board,
+        frames: s.board.frames.map((f) => f.id === id ? { ...f, ...patch } : f),
+      },
+    })),
+
+  // Restore board state from a saved frame snapshot
+  restoreFrame: (id) =>
+    set((s) => {
+      const frame = s.board.frames.find((f) => f.id === id)
+      if (!frame) return s
+      return {
+        board: {
+          ...s.board,
+          players:  frame.players.map((p) => ({ ...p })),
+          drawings: frame.drawings.map((d) => ({ ...d })),
+        },
+      }
+    }),
 
   exportBoard: () => JSON.stringify(get().board, null, 2),
 }))

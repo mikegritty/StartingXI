@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useBoardStore } from '../../store/boardStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import GameDayModal    from '../ui/GameDayModal'
 import PublishModal    from '../ui/PublishModal'
 import ShareModal      from '../ui/ShareModal'
 import SharedLinksPanel from '../ui/SharedLinksPanel'
 
 export default function TopBar() {
-  const name         = useBoardStore((s) => s.board.name)
-  const boardType    = useBoardStore((s) => s.board.type)
-  const setBoardName = useBoardStore((s) => s.setBoardName)
+  const name              = useBoardStore((s) => s.board.name)
+  const boardType         = useBoardStore((s) => s.board.type)
+  const setBoardName      = useBoardStore((s) => s.setBoardName)
+  const setTeamNotesOpen  = useSettingsStore((s) => s.setTeamNotesPanelOpen)
 
   // Modal states
   const [gameDayOpen,   setGameDayOpen]   = useState(false)
@@ -104,6 +106,16 @@ export default function TopBar() {
           title="My shared links"
         >
           My links
+        </button>
+
+        {/* Match Sheet / Team Notes */}
+        <button
+          onClick={() => setTeamNotesOpen(true)}
+          className="hidden md:block text-[11px] px-3 py-1.5 rounded-md border border-border
+                     text-text-muted hover:text-text-primary hover:border-text-muted transition-colors"
+          title="View match sheet and player notes"
+        >
+          Match Sheet
         </button>
 
         {/* Export */}

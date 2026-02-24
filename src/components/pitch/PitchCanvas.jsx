@@ -2,6 +2,10 @@ import { Stage } from 'react-konva'
 import { useRef, useState, useEffect } from 'react'
 import PitchLines from './PitchLines'
 import PlayerLayer from '../players/PlayerLayer'
+import DrawingLayer from '../drawing/DrawingLayer'
+import PreviewLayer from '../drawing/PreviewLayer'
+import TextInputOverlay from '../drawing/TextInputOverlay'
+import { useDrawingPointer } from '../drawing/useDrawingPointer'
 import { getPitchRect, normToPixel } from '../../utils/positions'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -9,7 +13,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 const TOKEN_RADIUS = 18  // must match PlayerToken.jsx
 
 /**
- * PitchCanvas renders the Konva stage with pitch lines and player tokens.
+ * PitchCanvas renders the Konva stage with pitch lines, drawings, and player tokens.
  *
  * Props:
  *   readOnly  – when true, renders in viewer mode: no drag/drop, no click handlers,
@@ -18,6 +22,7 @@ const TOKEN_RADIUS = 18  // must match PlayerToken.jsx
  */
 export default function PitchCanvas({ readOnly = false, board: boardProp = null }) {
   const containerRef = useRef(null)
+  const stageRef     = useRef(null)
   const [stageSize, setStageSize]   = useState({ width: 800, height: 600 })
   const [dropTarget, setDropTarget] = useState(null) // starterId being hovered over
 
@@ -30,9 +35,13 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
   const activePhase           = useSettingsStore((s) => s.activePhase)
   const pendingSubId          = useSettingsStore((s) => s.pendingSubId)
   const setPendingSubId       = useSettingsStore((s) => s.setPendingSubId)
+  const activeTool            = useSettingsStore((s) => s.activeTool)
+  const setActiveTool         = useSettingsStore((s) => s.setActiveTool)
 
   const zoneOverlay = readOnly ? (boardProp?.pitch?.zoneOverlay ?? 'none') : storeZoneOverlay
   const players     = readOnly ? (boardProp?.players ?? [])                : storePlayers
+
+  // ── Responsive stage sizing ──────────────────────────────────────────────
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -53,10 +62,40 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
   // Reference width 560px = 1.0 scale. Clamp between 0.7 and 1.1.
   const tokenScale = Math.min(1.1, Math.max(0.7, stageSize.width / 560))
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (readOnly) return
+    const SHORTCUTS = {
+      v: 'select',
+      a: 'pass',
+      c: 'run',
+      d: 'dribble',
+      z: 'zone',
+      h: 'highlight',
+      t: 'text',
+      e: 'eraser',
+    }
+    const handleKey = (ev) => {
+      // Don't capture when typing in an input
+      if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return
+      const tool = SHORTCUTS[ev.key.toLowerCase()]
+      if (tool) setActiveTool(tool)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [readOnly, setActiveTool])
+
+  // ── Drawing pointer hook ──────────────────────────────────────────────────
+
+  const { preview, textPending, clearTextPending, handlers: drawHandlers } =
+    useDrawingPointer(pitchRect, stageRef)
+
   // ── Edit-mode handlers (no-ops in readOnly) ──────────────────────────────
 
   const handleStageClick = (e) => {
     if (readOnly) return
+    if (activeTool !== 'select') return  // drawing tools handle their own pointer events
     if (e.target === e.target.getStage()) {
       deselectAll()
       setSelectedPlayerId(null)
@@ -120,27 +159,51 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
 
   const effectiveDropTarget = readOnly ? null : dropTarget
 
+  // Stage cursor
+  const getCursor = () => {
+    if (readOnly) return 'default'
+    if (activeTool === 'eraser') return 'cell'
+    if (activeTool !== 'select') return 'crosshair'
+    return 'default'
+  }
+
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-hidden relative"
       style={{
         background: '#0f1117',
-        cursor: readOnly ? 'default' : undefined,
+        cursor: getCursor(),
       }}
       onDragOver={readOnly ? undefined : handleDragOver}
       onDragLeave={readOnly ? undefined : handleDragLeave}
       onDrop={readOnly ? undefined : handleDrop}
     >
       <Stage
+        ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
         onClick={readOnly ? undefined : handleStageClick}
         onTap={readOnly ? undefined : handleStageClick}
+        onPointerDown={readOnly ? undefined : drawHandlers.onPointerDown}
+        onPointerMove={readOnly ? undefined : drawHandlers.onPointerMove}
+        onPointerUp={readOnly ? undefined : drawHandlers.onPointerUp}
         perfectDrawEnabled={false}
         pixelRatio={Math.min(window.devicePixelRatio ?? 1, 2)}
       >
         <PitchLines pitchRect={pitchRect} zoneOverlay={zoneOverlay} />
+
+        {/* Committed drawings */}
+        <DrawingLayer
+          pitchRect={pitchRect}
+          drawings={readOnly ? (boardProp?.drawings ?? []) : undefined}
+        />
+
+        {/* Live preview while drawing */}
+        {!readOnly && (
+          <PreviewLayer preview={preview} pitchRect={pitchRect} />
+        )}
+
         <PlayerLayer
           pitchRect={pitchRect}
           activePhase={readOnly ? { home: 'in', away: 'in' } : activePhase}
@@ -151,6 +214,16 @@ export default function PitchCanvas({ readOnly = false, board: boardProp = null 
           boardPlayers={readOnly ? players : null}
         />
       </Stage>
+
+      {/* Text input overlay — DOM element, positioned over canvas */}
+      {!readOnly && textPending && (
+        <TextInputOverlay
+          textPending={textPending}
+          onClose={clearTextPending}
+          pitchRect={pitchRect}
+          containerRef={containerRef}
+        />
+      )}
 
       {/* Mobile substitution mode banner — overlays pitch (edit mode only) */}
       {!readOnly && pendingSubId && (

@@ -54,6 +54,11 @@ export default function PlayerToken({
   const setSelectedId    = useSettingsStore((s) => s.setSelectedPlayerId)
   const pendingSubId     = useSettingsStore((s) => s.pendingSubId)
   const setPendingSubId  = useSettingsStore((s) => s.setPendingSubId)
+  const activeTool       = useSettingsStore((s) => s.activeTool)
+  const setNotePlayerId  = useSettingsStore((s) => s.setNotePlayerId)
+
+  // Tokens are only interactive when the select tool is active (and not readOnly)
+  const isInteractive = !readOnly && activeTool === 'select'
 
   const { px, py } = normToPixel(nx, ny, pitchRect)
 
@@ -71,14 +76,14 @@ export default function PlayerToken({
   // ── Edit-mode handlers (suppressed when readOnly) ────────────────────────
 
   const handleDragEnd = (e) => {
-    if (readOnly) return
+    if (!isInteractive) return
     const node = e.target
     const { nx: newNx, ny: newNy } = pixelToNorm(node.x(), node.y(), pitchRect)
     movePlayer(id, clampNorm(newNx), clampNorm(newNy), phase)
   }
 
   const handleClick = (e) => {
-    if (readOnly) return
+    if (!isInteractive) return
     e.cancelBubble = true
     // Touch substitution: if a sub is pending and this is a home starter, sub them in
     if (pendingSubId && team === 'home') {
@@ -91,42 +96,49 @@ export default function PlayerToken({
   }
 
   const handleContextMenu = (e) => {
-    if (readOnly) return
+    if (!isInteractive) return
     e.evt.preventDefault()
     e.cancelBubble = true
-    removePlayer(id)
-    setSelectedId(null)
+    // Right-click opens player note sheet (long-press on mobile via delete badge)
+    setNotePlayerId(id)
   }
 
   // Mobile delete: tap the ✕ badge on a selected token
   const handleDeleteBadge = (e) => {
-    if (readOnly) return
+    if (!isInteractive) return
     e.cancelBubble = true
     removePlayer(id)
     setSelectedId(null)
   }
 
+  // Mobile note badge: tap the 📝 badge on a selected token
+  const handleNoteBadge = (e) => {
+    if (!isInteractive) return
+    e.cancelBubble = true
+    setNotePlayerId(id)
+  }
+
   const handleDragStart = (e) => {
-    if (readOnly) return
+    if (!isInteractive) return
     e.target.moveToTop()
   }
 
   // When substitution mode is active, highlight all home starters as valid targets
-  const isSubTarget = !readOnly && pendingSubMode && team === 'home'
+  const isSubTarget = isInteractive && pendingSubMode && team === 'home'
 
   return (
     <Group
       x={px}
       y={py}
-      draggable={!readOnly}
-      onDragStart={readOnly ? undefined : handleDragStart}
-      onDragEnd={readOnly ? undefined : handleDragEnd}
-      onClick={readOnly ? undefined : handleClick}
-      onTap={readOnly ? undefined : handleClick}
-      onContextMenu={readOnly ? undefined : handleContextMenu}
+      draggable={isInteractive}
+      onDragStart={isInteractive ? handleDragStart : undefined}
+      onDragEnd={isInteractive ? handleDragEnd : undefined}
+      onClick={isInteractive ? handleClick : undefined}
+      onTap={isInteractive ? handleClick : undefined}
+      onContextMenu={isInteractive ? handleContextMenu : undefined}
     >
       {/* Invisible hit area — kept larger than visual token for easy touch targets */}
-      {!readOnly && (
+      {isInteractive && (
         <Circle radius={Math.max(TOKEN_RADIUS + 6, r + 4)} fill="transparent" />
       )}
 
@@ -153,8 +165,8 @@ export default function PlayerToken({
         />
       )}
 
-      {/* Selection ring — only in edit mode */}
-      {!readOnly && selected && (
+      {/* Selection ring — only in select mode */}
+      {isInteractive && selected && (
         <Circle
           radius={r + 6}
           stroke="#ffffff"
@@ -222,26 +234,62 @@ export default function PlayerToken({
         </>
       )}
 
-      {/* Mobile delete badge — shown on selected token as alternative to right-click (edit mode only) */}
-      {!readOnly && selected && isMobile && (
-        <Group
-          x={r * 0.65}
+      {/* Note indicator dot — shown when player has a note (top-left of token) */}
+      {!readOnly && player.note && (
+        <Circle
+          x={-r * 0.65}
           y={-r * 0.65}
-          onClick={handleDeleteBadge}
-          onTap={handleDeleteBadge}
-        >
-          <Circle radius={8} fill="#ef4444" />
-          <Text
-            text="✕"
-            fontSize={8}
-            fill="#ffffff"
-            width={16}
-            align="center"
-            x={-8}
-            y={-5}
-            listening={false}
-          />
-        </Group>
+          radius={4}
+          fill="#ffffff"
+          stroke="rgba(0,0,0,0.4)"
+          strokeWidth={1}
+          listening={false}
+        />
+      )}
+
+      {/* Mobile delete badge — shown on selected token as alternative to right-click (select mode only) */}
+      {isInteractive && selected && isMobile && (
+        <>
+          {/* Delete badge (top-right) */}
+          <Group
+            x={r * 0.65}
+            y={-r * 0.65}
+            onClick={handleDeleteBadge}
+            onTap={handleDeleteBadge}
+          >
+            <Circle radius={8} fill="#ef4444" />
+            <Text
+              text="✕"
+              fontSize={8}
+              fill="#ffffff"
+              width={16}
+              align="center"
+              x={-8}
+              y={-5}
+              listening={false}
+            />
+          </Group>
+
+          {/* Note badge (top-left) */}
+          <Group
+            x={-r * 0.65}
+            y={-r * 0.65}
+            onClick={handleNoteBadge}
+            onTap={handleNoteBadge}
+          >
+            <Circle radius={8} fill="#6366f1" />
+            <Text
+              text="✎"
+              fontSize={9}
+              fill="#ffffff"
+              width={16}
+              align="center"
+              x={-8}
+              y={-5.5}
+              listening={false}
+            />
+          </Group>
+        </>
       )}
     </Group>
   )

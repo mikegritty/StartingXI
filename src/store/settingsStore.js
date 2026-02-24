@@ -8,10 +8,21 @@ export const useSettingsStore = create((set) => ({
   pendingFormationApply: null, // { team, players, formationKey, phase }
   pendingSubId: null,          // id of sub selected for touch substitution
 
+  // Drawing color — used by all drawing tools
+  drawColor: '#ffffff',
+  // Note panel — which player's note is open
+  notePlayerId: null,
+  // Team notes panel open
+  teamNotesPanelOpen: false,
+
+  // Animation
+  activeFrameId: null,   // null = live board, string = frame id being previewed
+  isPlaying: false,
+
   // Which phase is being viewed/edited per team: 'in' | 'out'
   activePhase: { home: 'in', away: 'in' },
 
-  // Which formation is active per team per phase: { home: { in: '4-3-3', out: '4-4-2' }, away: {...} }
+  // Which formation is active per team per phase
   activeFormations: {
     home: { in: null, out: null },
     away: { in: null, out: null },
@@ -21,6 +32,11 @@ export const useSettingsStore = create((set) => ({
   setShowPlayerNames: (v) => set({ showPlayerNames: v }),
   setSelectedPlayerId: (id) => set({ selectedPlayerId: id }),
   setPendingSubId: (id) => set({ pendingSubId: id }),
+  setDrawColor: (color) => set({ drawColor: color }),
+  setNotePlayerId: (id) => set({ notePlayerId: id }),
+  setTeamNotesPanelOpen: (v) => set({ teamNotesPanelOpen: v }),
+  setActiveFrameId: (id) => set({ activeFrameId: id }),
+  setIsPlaying: (v) => set({ isPlaying: v }),
 
   setActivePhase: (team, phase) =>
     set((s) => ({

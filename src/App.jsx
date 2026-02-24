@@ -5,6 +5,9 @@ import RightPanel from './components/panels/RightPanel'
 import PitchCanvas from './components/pitch/PitchCanvas'
 import Toolbar from './components/tools/Toolbar'
 import ConfirmFormationModal from './components/ui/Modal'
+import PlayerNoteSheet from './components/panels/PlayerNoteSheet'
+import TeamNotesPanel from './components/panels/TeamNotesPanel'
+import FrameTimeline from './components/animation/FrameTimeline'
 import { useMobile } from './hooks/useMobile'
 
 export default function App() {
@@ -62,12 +65,15 @@ export default function App() {
         )}
       </div>
 
+      <FrameTimeline />
       <Toolbar
         isMobile={isMobile}
         activeSheet={activeSheet}
         onToggleSheet={toggleSheet}
       />
       <ConfirmFormationModal />
+      <PlayerNoteSheet />
+      <TeamNotesPanel />
     </div>
   )
 }
