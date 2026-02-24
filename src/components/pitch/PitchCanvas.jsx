@@ -8,19 +8,31 @@ import { useSettingsStore } from '../../store/settingsStore'
 
 const TOKEN_RADIUS = 18  // must match PlayerToken.jsx
 
-export default function PitchCanvas() {
+/**
+ * PitchCanvas renders the Konva stage with pitch lines and player tokens.
+ *
+ * Props:
+ *   readOnly  – when true, renders in viewer mode: no drag/drop, no click handlers,
+ *               cursor is default. Pass `board` prop to supply data from outside the store.
+ *   board     – optional board snapshot (used in readOnly viewer mode instead of store)
+ */
+export default function PitchCanvas({ readOnly = false, board: boardProp = null }) {
   const containerRef = useRef(null)
   const [stageSize, setStageSize]   = useState({ width: 800, height: 600 })
   const [dropTarget, setDropTarget] = useState(null) // starterId being hovered over
 
-  const zoneOverlay        = useBoardStore((s) => s.board.pitch.zoneOverlay)
-  const deselectAll        = useBoardStore((s) => s.deselectAll)
-  const players            = useBoardStore((s) => s.board.players)
-  const substitutePlayer   = useBoardStore((s) => s.substitutePlayer)
-  const setSelectedPlayerId = useSettingsStore((s) => s.setSelectedPlayerId)
-  const activePhase        = useSettingsStore((s) => s.activePhase)
-  const pendingSubId       = useSettingsStore((s) => s.pendingSubId)
-  const setPendingSubId    = useSettingsStore((s) => s.setPendingSubId)
+  // In readOnly mode we read from the prop; in edit mode from the store
+  const storeZoneOverlay      = useBoardStore((s) => s.board.pitch.zoneOverlay)
+  const storePlayers          = useBoardStore((s) => s.board.players)
+  const deselectAll           = useBoardStore((s) => s.deselectAll)
+  const substitutePlayer      = useBoardStore((s) => s.substitutePlayer)
+  const setSelectedPlayerId   = useSettingsStore((s) => s.setSelectedPlayerId)
+  const activePhase           = useSettingsStore((s) => s.activePhase)
+  const pendingSubId          = useSettingsStore((s) => s.pendingSubId)
+  const setPendingSubId       = useSettingsStore((s) => s.setPendingSubId)
+
+  const zoneOverlay = readOnly ? (boardProp?.pitch?.zoneOverlay ?? 'none') : storeZoneOverlay
+  const players     = readOnly ? (boardProp?.players ?? [])                : storePlayers
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -41,7 +53,10 @@ export default function PitchCanvas() {
   // Reference width 560px = 1.0 scale. Clamp between 0.7 and 1.1.
   const tokenScale = Math.min(1.1, Math.max(0.7, stageSize.width / 560))
 
+  // ── Edit-mode handlers (no-ops in readOnly) ──────────────────────────────
+
   const handleStageClick = (e) => {
+    if (readOnly) return
     if (e.target === e.target.getStage()) {
       deselectAll()
       setSelectedPlayerId(null)
@@ -69,7 +84,7 @@ export default function PitchCanvas() {
   }
 
   const handleDragOver = (e) => {
-    // Only respond if we have a subId being dragged
+    if (readOnly) return
     if (!e.dataTransfer.types.includes('subid')) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -82,10 +97,12 @@ export default function PitchCanvas() {
   }
 
   const handleDragLeave = () => {
+    if (readOnly) return
     setDropTarget(null)
   }
 
   const handleDrop = (e) => {
+    if (readOnly) return
     e.preventDefault()
     const subId = e.dataTransfer.getData('subId')
     if (!subId) return
@@ -101,38 +118,42 @@ export default function PitchCanvas() {
     setDropTarget(null)
   }
 
-  // Combined drop target: HTML5 drag-and-drop (desktop) OR pending touch sub (mobile)
-  const effectiveDropTarget = dropTarget
+  const effectiveDropTarget = readOnly ? null : dropTarget
 
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-hidden relative"
-      style={{ background: '#0f1117' }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      style={{
+        background: '#0f1117',
+        cursor: readOnly ? 'default' : undefined,
+      }}
+      onDragOver={readOnly ? undefined : handleDragOver}
+      onDragLeave={readOnly ? undefined : handleDragLeave}
+      onDrop={readOnly ? undefined : handleDrop}
     >
       <Stage
         width={stageSize.width}
         height={stageSize.height}
-        onClick={handleStageClick}
-        onTap={handleStageClick}
+        onClick={readOnly ? undefined : handleStageClick}
+        onTap={readOnly ? undefined : handleStageClick}
         perfectDrawEnabled={false}
         pixelRatio={Math.min(window.devicePixelRatio ?? 1, 2)}
       >
         <PitchLines pitchRect={pitchRect} zoneOverlay={zoneOverlay} />
         <PlayerLayer
           pitchRect={pitchRect}
-          activePhase={activePhase}
+          activePhase={readOnly ? { home: 'in', away: 'in' } : activePhase}
           dropTargetId={effectiveDropTarget}
-          pendingSubMode={!!pendingSubId}
+          pendingSubMode={readOnly ? false : !!pendingSubId}
           tokenScale={tokenScale}
+          readOnly={readOnly}
+          boardPlayers={readOnly ? players : null}
         />
       </Stage>
 
-      {/* Mobile substitution mode banner — overlays pitch */}
-      {pendingSubId && (
+      {/* Mobile substitution mode banner — overlays pitch (edit mode only) */}
+      {!readOnly && pendingSubId && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10
                         flex items-center gap-2 px-3 py-1.5 rounded-full
                         bg-accent-blue/90 backdrop-blur-sm shadow-lg">

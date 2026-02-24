@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid'
 const DEFAULT_BOARD = {
   id: uuidv4(),
   name: 'New Board',
+  type: 'tactic',        // 'tactic' | 'gameday'
+  gameDayMeta: null,     // { teamName, opponentName, matchDate } or null
   pitch: {
     variant: 'full',
     orientation: 'vertical',
@@ -31,6 +33,15 @@ export const useBoardStore = create((set, get) => ({
 
   setBoardName: (name) =>
     set((s) => ({ board: { ...s.board, name } })),
+
+  setType: (type) =>
+    set((s) => ({ board: { ...s.board, type } })),
+
+  setGameDayMeta: (meta) =>
+    set((s) => ({ board: { ...s.board, gameDayMeta: meta } })),
+
+  resetBoard: () =>
+    set({ board: { ...DEFAULT_BOARD, id: uuidv4() } }),
 
   setZoneOverlay: (zoneOverlay) =>
     set((s) => ({ board: { ...s.board, pitch: { ...s.board.pitch, zoneOverlay } } })),

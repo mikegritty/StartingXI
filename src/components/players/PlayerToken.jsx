@@ -1,4 +1,4 @@
-import { Group, Circle, Text, Rect, RegularPolygon } from 'react-konva'
+import { Group, Circle, Text, Rect } from 'react-konva'
 import { useBoardStore } from '../../store/boardStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { normToPixel, pixelToNorm, clampNorm } from '../../utils/positions'
@@ -21,7 +21,21 @@ function contrastColor(hex) {
   }
 }
 
-export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pendingSubMode, tokenScale = 1 }) {
+/**
+ * PlayerToken renders a single player token on the Konva canvas.
+ *
+ * Props:
+ *   readOnly – when true, token is display-only: no drag, no click, no delete badge
+ */
+export default function PlayerToken({
+  player,
+  pitchRect,
+  phase,
+  isDropTarget,
+  pendingSubMode,
+  tokenScale = 1,
+  readOnly = false,
+}) {
   const { id, team, role, selected } = player
 
   // Pull position from the correct phase
@@ -54,13 +68,17 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pe
   // Scaled radius for visual elements — hit area stays larger for touch
   const r = TOKEN_RADIUS * tokenScale
 
+  // ── Edit-mode handlers (suppressed when readOnly) ────────────────────────
+
   const handleDragEnd = (e) => {
+    if (readOnly) return
     const node = e.target
     const { nx: newNx, ny: newNy } = pixelToNorm(node.x(), node.y(), pitchRect)
     movePlayer(id, clampNorm(newNx), clampNorm(newNy), phase)
   }
 
   const handleClick = (e) => {
+    if (readOnly) return
     e.cancelBubble = true
     // Touch substitution: if a sub is pending and this is a home starter, sub them in
     if (pendingSubId && team === 'home') {
@@ -73,6 +91,7 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pe
   }
 
   const handleContextMenu = (e) => {
+    if (readOnly) return
     e.evt.preventDefault()
     e.cancelBubble = true
     removePlayer(id)
@@ -81,31 +100,35 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pe
 
   // Mobile delete: tap the ✕ badge on a selected token
   const handleDeleteBadge = (e) => {
+    if (readOnly) return
     e.cancelBubble = true
     removePlayer(id)
     setSelectedId(null)
   }
 
   const handleDragStart = (e) => {
+    if (readOnly) return
     e.target.moveToTop()
   }
 
   // When substitution mode is active, highlight all home starters as valid targets
-  const isSubTarget = pendingSubMode && team === 'home'
+  const isSubTarget = !readOnly && pendingSubMode && team === 'home'
 
   return (
     <Group
       x={px}
       y={py}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onClick={handleClick}
-      onTap={handleClick}
-      onContextMenu={handleContextMenu}
+      draggable={!readOnly}
+      onDragStart={readOnly ? undefined : handleDragStart}
+      onDragEnd={readOnly ? undefined : handleDragEnd}
+      onClick={readOnly ? undefined : handleClick}
+      onTap={readOnly ? undefined : handleClick}
+      onContextMenu={readOnly ? undefined : handleContextMenu}
     >
       {/* Invisible hit area — kept larger than visual token for easy touch targets */}
-      <Circle radius={Math.max(TOKEN_RADIUS + 6, r + 4)} fill="transparent" />
+      {!readOnly && (
+        <Circle radius={Math.max(TOKEN_RADIUS + 6, r + 4)} fill="transparent" />
+      )}
 
       {/* Sub target pulse ring — shown when substitution mode is active */}
       {isSubTarget && !isDropTarget && (
@@ -130,8 +153,8 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pe
         />
       )}
 
-      {/* Selection ring */}
-      {selected && (
+      {/* Selection ring — only in edit mode */}
+      {!readOnly && selected && (
         <Circle
           radius={r + 6}
           stroke="#ffffff"
@@ -199,8 +222,8 @@ export default function PlayerToken({ player, pitchRect, phase, isDropTarget, pe
         </>
       )}
 
-      {/* Mobile delete badge — shown on selected token as alternative to right-click */}
-      {selected && isMobile && (
+      {/* Mobile delete badge — shown on selected token as alternative to right-click (edit mode only) */}
+      {!readOnly && selected && isMobile && (
         <Group
           x={r * 0.65}
           y={-r * 0.65}
