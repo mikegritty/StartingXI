@@ -12,6 +12,11 @@ import { roleFromNumber } from '../../data/formations'
 const PLAYS_KEY = 'startingxi_plays'
 const MAX_PLAYS = 20
 
+function todayLabel() {
+  const d = new Date()
+  return `New Game ${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`
+}
+
 // ── NAV_ITEMS ─────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
@@ -314,33 +319,15 @@ function GameDaySection() {
   )
 }
 
-// ── MyPlays / Saved Games ─────────────────────────────────────────────────────
+// ── GamesListView — saved games list with New Game button ────────────────────
 
-function MyPlays() {
-  const board     = useBoardStore((s) => s.board)
-  const loadBoard = useBoardStore((s) => s.loadBoard)
-
-  const [plays, setPlays]       = useState(() => loadPlays())
-  const [saving, setSaving]     = useState(false)
-  const [saveName, setSaveName] = useState('')
-  const saveInputRef            = useRef(null)
-
-  useEffect(() => {
-    if (saving && saveInputRef.current) saveInputRef.current.focus()
-  }, [saving])
-
-  const handleSave = () => {
-    const name  = saveName.trim() || board.name || 'Untitled'
-    const entry = { id: uuidv4(), name, savedAt: Date.now(), board: JSON.parse(JSON.stringify(board)) }
-    const updated = [entry, ...plays].slice(0, MAX_PLAYS)
-    savePlaysToStorage(updated)
-    setPlays(updated)
-    setSaving(false)
-    setSaveName('')
-  }
+function GamesListView({ onLoad, onNew }) {
+  const [plays, setPlays] = useState(() => loadPlays())
+  const loadBoard         = useBoardStore((s) => s.loadBoard)
 
   const handleLoad = (entry) => {
     loadBoard(entry.board)
+    onLoad()
   }
 
   const handleDelete = (id) => {
@@ -354,48 +341,30 @@ function MyPlays() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Saved Games</p>
-        {!saving && (
-          <button
-            onClick={() => { setSaving(true); setSaveName(board.name || '') }}
-            className="text-[10px] px-2 py-0.5 rounded border border-border
-                       text-text-muted hover:text-text-primary hover:border-accent-blue transition-colors"
-          >
-            + Save
-          </button>
-        )}
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Games</p>
+        <button
+          onClick={onNew}
+          className="text-[10px] px-2 py-0.5 rounded border border-border
+                     text-text-muted hover:text-text-primary hover:border-accent-blue transition-colors"
+        >
+          + New
+        </button>
       </div>
 
-      {saving && (
-        <div className="flex items-center gap-1.5 mb-2">
-          <input
-            ref={saveInputRef}
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave()
-              if (e.key === 'Escape') { setSaving(false); setSaveName('') }
-            }}
-            placeholder="Game name..."
-            className="flex-1 min-w-0 text-xs bg-surface border border-accent-blue rounded px-2 py-1
-                       text-text-primary outline-none placeholder:text-text-muted"
-          />
-          <button onClick={handleSave}
-            className="text-[10px] px-2 py-1 rounded bg-accent-blue text-white hover:bg-blue-700 transition-colors font-medium shrink-0">
-            Save
-          </button>
-          <button onClick={() => { setSaving(false); setSaveName('') }}
-            className="text-[10px] text-text-muted hover:text-text-primary transition-colors shrink-0">
-            ✕
+      {/* Saved games list */}
+      {plays.length === 0 ? (
+        <div className="py-6 text-center">
+          <p className="text-[11px] text-text-muted/60 leading-snug mb-3">No saved games yet.</p>
+          <button
+            onClick={onNew}
+            className="text-[11px] px-3 py-1.5 rounded-md border border-border
+                       text-text-muted hover:text-text-primary hover:border-accent-blue transition-colors"
+          >
+            Start a new game
           </button>
         </div>
-      )}
-
-      {plays.length === 0 ? (
-        <p className="text-[11px] text-text-muted/60 italic leading-snug">
-          No saved games yet. Hit <span className="not-italic font-medium text-text-muted">+ Save</span> to save the current board.
-        </p>
       ) : (
         <div className="space-y-0.5">
           {plays.map((entry) => (
@@ -404,7 +373,7 @@ function MyPlays() {
               onClick={() => handleLoad(entry)}
               className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-md group cursor-pointer
                          hover:bg-accent-blue/10 transition-colors"
-              title="Click to load"
+              title="Click to open"
             >
               {/* Team color dots */}
               <div className="flex flex-col gap-0.5 shrink-0">
@@ -430,52 +399,148 @@ function MyPlays() {
   )
 }
 
-// ── Section components ────────────────────────────────────────────────────────
+// ── GameSettingsView — game-specific settings panel ───────────────────────────
 
-function GamesSection() {
-  const [settingsOpen, setSettingsOpen] = useState(false)
+function GameSettingsView({ onBack }) {
+  const board        = useBoardStore((s) => s.board)
+  const setBoardName = useBoardStore((s) => s.setBoardName)
+  const showNames    = useSettingsStore((s) => s.showPlayerNames)
+  const setShowNames = useSettingsStore((s) => s.setShowPlayerNames)
+
+  // Save current game to plays list
+  const [plays, setPlays]       = useState(() => loadPlays())
+  const [saving, setSaving]     = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [nameVal, setNameVal]   = useState(board.name ?? '')
+  const saveInputRef            = useRef(null)
+
+  useEffect(() => { setNameVal(board.name ?? '') }, [board.name])
+  useEffect(() => {
+    if (saving && saveInputRef.current) saveInputRef.current.focus()
+  }, [saving])
+
+  const handleSave = () => {
+    const name  = saveName.trim() || board.name || 'Untitled'
+    const entry = { id: uuidv4(), name, savedAt: Date.now(), board: JSON.parse(JSON.stringify(board)) }
+    const updated = [entry, ...plays].slice(0, MAX_PLAYS)
+    savePlaysToStorage(updated)
+    setPlays(updated)
+    setSaving(false)
+    setSaveName('')
+  }
 
   return (
     <div className="flex flex-col gap-0">
-      {/* ── Saved games (primary content) ── */}
-      <MyPlays />
+      {/* ── Back navigation + game name ── */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={onBack}
+          className="text-text-muted hover:text-text-primary transition-colors shrink-0"
+          title="Back to games list"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <input
+          value={nameVal}
+          onChange={(e) => setNameVal(e.target.value)}
+          onBlur={() => setBoardName(nameVal.trim() || todayLabel())}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+          className="flex-1 min-w-0 bg-transparent border-none outline-none
+                     text-xs font-semibold text-text-primary
+                     focus:bg-surface focus:rounded focus:ring-1 focus:ring-accent-blue/40
+                     px-1 transition-colors"
+          placeholder="Game name…"
+          title="Game name"
+        />
+      </div>
 
-      {/* ── Game day details ── */}
+      {/* ── Opponent (away team) ── */}
+      <TeamSection team="away" defaultOpen={true} />
+
+      {/* ── Game Day details ── */}
       <div className="mt-5 pt-4 border-t border-border">
         <GameDaySection />
       </div>
 
-      {/* ── Team settings (collapsible) ── */}
+      {/* ── Display settings ── */}
       <div className="mt-5 pt-4 border-t border-border">
-        <button
-          onClick={() => setSettingsOpen((o) => !o)}
-          className="w-full flex items-center justify-between group mb-2"
-        >
-          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider
-                           group-hover:text-text-primary transition-colors">
-            Team Settings
+        <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-2">
+          Display
+        </label>
+        <button onClick={() => setShowNames(!showNames)} className="flex items-center gap-3 group w-full">
+          <div className={`w-8 h-4 rounded-full relative transition-colors shrink-0
+            ${showNames ? 'bg-accent-blue' : 'bg-border'}`}>
+            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform
+              ${showNames ? 'translate-x-4' : 'translate-x-0.5'}`} />
+          </div>
+          <span className="text-xs text-text-muted group-hover:text-text-primary transition-colors">
+            Player names
           </span>
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none"
-            className={`text-text-muted transition-transform group-hover:text-text-primary
-              ${settingsOpen ? '' : '-rotate-90'}`}>
-            <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
         </button>
+      </div>
 
-        {settingsOpen && (
-          <div className="flex flex-col gap-0">
-            <TeamSection team="home" defaultOpen={true} showNamesToggle={true} />
-            <div className="flex items-center gap-2 my-6">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-text-muted/40 px-2">vs</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-            <TeamSection team="away" defaultOpen={false} />
+      {/* ── Save this game ── */}
+      <div className="mt-5 pt-4 border-t border-border">
+        {!saving ? (
+          <button
+            onClick={() => { setSaving(true); setSaveName(board.name || '') }}
+            className="w-full text-[10px] py-1.5 rounded-md border border-border
+                       text-text-muted hover:text-text-primary hover:border-accent-blue transition-colors"
+          >
+            Save game
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={saveInputRef}
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave()
+                if (e.key === 'Escape') { setSaving(false); setSaveName('') }
+              }}
+              placeholder="Game name..."
+              className="flex-1 min-w-0 text-xs bg-surface border border-accent-blue rounded px-2 py-1
+                         text-text-primary outline-none placeholder:text-text-muted"
+            />
+            <button onClick={handleSave}
+              className="text-[10px] px-2 py-1 rounded bg-accent-blue text-white hover:bg-blue-700 transition-colors font-medium shrink-0">
+              Save
+            </button>
+            <button onClick={() => { setSaving(false); setSaveName('') }}
+              className="text-[10px] text-text-muted hover:text-text-primary transition-colors shrink-0">
+              ✕
+            </button>
           </div>
         )}
       </div>
     </div>
   )
+}
+
+// ── Section components ────────────────────────────────────────────────────────
+
+function GamesSection() {
+  const [view, setView]    = useState('list') // 'list' | 'settings'
+  const resetBoard         = useBoardStore((s) => s.resetBoard)
+
+  const handleNew = () => {
+    resetBoard()
+    setView('settings')
+  }
+
+  if (view === 'list') {
+    return (
+      <GamesListView
+        onLoad={() => setView('settings')}
+        onNew={handleNew}
+      />
+    )
+  }
+
+  return <GameSettingsView onBack={() => setView('list')} />
 }
 
 const ROLE_COLORS = { GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#ef4444' }
