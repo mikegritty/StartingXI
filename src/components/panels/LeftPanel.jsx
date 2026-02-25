@@ -758,19 +758,6 @@ export default function LeftPanel({ collapsed = false, onExpand }) {
       {/* ── Always-visible icon rail ── */}
       <div className="w-10 shrink-0 flex flex-col items-center py-3 gap-0.5 border-r border-border/50">
 
-        {/* Hamburger — toggles content panel */}
-        <button
-          onClick={onExpand}
-          title={collapsed ? 'Expand panel' : 'Collapse panel'}
-          className="w-8 h-8 flex items-center justify-center rounded-md mb-1
-                     text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 3h10M2 7h10M2 11h10"/>
-          </svg>
-        </button>
-
-        <div className="w-5 h-px bg-border mb-1" />
 
         {/* Squad — with home color dot */}
         <button
