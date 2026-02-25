@@ -23,6 +23,65 @@ function saveSquadToStorage(board) {
   } catch { /* ignore */ }
 }
 
+// Pick an away-team color that contrasts with the home color.
+// If home is warm/reddish → pick blue; if cool/bluish or neutral → pick red.
+function pickContrastColor(hex) {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return r > Math.max(g, b) ? '#1a56db' : '#dc2626'
+  } catch { return '#dc2626' }
+}
+
+// Build a fresh new-game board from current localStorage squad.
+// Called by resetBoard so it always reflects the latest persisted squad,
+// not the stale module-level snapshot taken at app boot.
+function buildFreshBoard() {
+  const squad       = loadSquadFromStorage()
+  const homePlayers = squad?.players?.length
+    ? squad.players
+    : DEFAULT_4231.map((p) => ({ ...p, id: uuidv4() }))
+  const homeTeam    = squad?.homeTeam
+    ? { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff', ...squad.homeTeam }
+    : { name: 'Home Team', primaryColor: '#1a56db', secondaryColor: '#ffffff' }
+  const homeInstr   = squad?.homeInstructions ?? ''
+  const awayColor   = pickContrastColor(homeTeam.primaryColor)
+
+  return {
+    ...DEFAULT_BOARD,
+    id:          uuidv4(),
+    name:        todayName(),
+    type:        'tactic',
+    gameDayMeta: null,
+    teams: {
+      home: homeTeam,
+      away: { name: 'Away Team', primaryColor: awayColor, secondaryColor: '#ffffff' },
+    },
+    players:  homePlayers,          // home only — no away until user picks a formation
+    drawings: [],
+    play: {
+      ...DEFAULT_BOARD.play,
+      name: '',
+      frames: [{
+        id:       uuidv4(),
+        index:    0,
+        label:    'Frame 1',
+        phase:    null,
+        players:  homePlayers.map((p) => ({ ...p })),
+        drawings: [],
+        duration: 1.5,
+      }],
+      currentFrameIndex:     0,
+      isPlaying:             false,
+      animateBetweenFrames:  false,
+    },
+    equipment:        [],
+    labels:           [],
+    teamInstructions: { home: homeInstr, away: '' },
+  }
+}
+
 // Default home team in 4-2-3-1 — always shown on a fresh board so the pitch is never empty.
 const DEFAULT_4231 = [
   { role: 'GK',  position: 'GK',  number: 1,  x: 0.50, y: 0.93 },
@@ -118,8 +177,10 @@ export const useBoardStore = create((set, get) => ({
   setGameDayMeta: (meta) =>
     set((s) => ({ board: { ...s.board, gameDayMeta: meta } })),
 
-  resetBoard: () =>
-    set({ board: { ...DEFAULT_BOARD, id: uuidv4() } }),
+  // Build a genuinely fresh board from the current persisted squad.
+  // Always reads localStorage fresh so mid-session squad edits are included.
+  // Away team gets an auto-contrasting color so it never looks like the home team.
+  resetBoard: () => set({ board: buildFreshBoard() }),
 
   setZoneOverlay: (zoneOverlay) =>
     set((s) => ({ board: { ...s.board, pitch: { ...s.board.pitch, zoneOverlay } } })),
@@ -359,6 +420,11 @@ export const useBoardStore = create((set, get) => ({
       : { ...DEFAULT_BOARD.teams.home, ...(board.teams?.home ?? {}) }
     const homeInstr = squad?.homeInstructions ?? board.teamInstructions?.home ?? ''
 
+    // Use saved away color if it exists; otherwise pick a contrasting color so
+    // the away team never looks identical to home (e.g. both saved as red).
+    const savedAwayColor  = board.teams?.away?.primaryColor
+    const awayColor       = savedAwayColor ?? pickContrastColor(homeTeam.primaryColor)
+
     return set({
       board: {
         ...DEFAULT_BOARD,
@@ -366,7 +432,11 @@ export const useBoardStore = create((set, get) => ({
         pitch: { ...DEFAULT_BOARD.pitch, ...(board.pitch ?? {}) },
         teams: {
           home: homeTeam,
-          away: { ...DEFAULT_BOARD.teams.away, ...(board.teams?.away ?? {}) },
+          away: {
+            name: 'Away Team', secondaryColor: '#ffffff',
+            ...(board.teams?.away ?? {}),
+            primaryColor: awayColor,
+          },
         },
         players: [...homePlayers, ...awayPlayers],
         play: {
